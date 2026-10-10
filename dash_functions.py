@@ -153,7 +153,7 @@ def read_all_states():
 # get_state_raw() instead of get_state() - e.g. binary_sensor.charging
 # ("on"/"off"), or spring_time_to_limit which Home Assistant already
 # formats as a string like "3h 20m".
-RAW_STRING_SENSORS = {"spring_charge_status", "spring_time_to_limit", "inverter_grid_status"}
+RAW_STRING_SENSORS = {"spring_charge_status", "spring_time_to_limit", "inverter_grid_status", "inverter_fans_1", "inverter_fans_2"}
 def read_values():
     values = {}
 
@@ -208,6 +208,8 @@ def read_values():
         values["inverter_temp"] = round(random.uniform(-10, 55), 2) #sensor.inverter_internal_temperature
         values["battery_bms_temp"] = round(random.uniform(-10, 55), 2) #sensor.battery_1_temperature
         values["battery_avg_temp"] = round(random.uniform(-10, 55), 2) #sensor.battery_1_average_temperature
+        values["inverter_fans_1"] = random.choice(["on", "off"]) #switch.sonoff_10021e6428_1
+        values["inverter_fans_2"] = random.choice(["on", "off"]) #switch.sonoff_10021e6428_2
 
         values["battery_pack1_avg_temp"] = round(random.uniform(-10, 55), 2) #sensor.battery_1_pack_1_average_temperature
         values["battery_pack2_avg_temp"] = round(random.uniform(-10, 55), 2) #sensor.battery_1_pack_2_average_temperature
@@ -235,6 +237,13 @@ def read_values():
         values["spring_time_to_limit"] = "1h 23m" #sensor.spring_time_remaining_2 # string !
         values["spring_kwh_to_limit"] = round(random.uniform(0, 26), 2) #sensor.spring_charge_capacity_remaining
         values["spring_temp"] = round(random.uniform(-10, 65), 2) #sensor.shelly_blu_h_t_ble_temperature
+
+        values["energy_solar_kwh"] = random.randint(0, 100)
+        values["energy_grid_import_kwh"] = random.randint(0, 100)
+        values["energy_grid_export_kwh"] = random.randint(0, 100)
+        values["energy_house_kwh"] = random.randint(0, 100)
+        values["energy_battery_discharge_kwh"] = random.randint(0, 100)
+        values["energy_battery_charge_kwh"] = random.randint(0, 100)
     # end TEST MODE
 
     return values
@@ -363,6 +372,9 @@ def render(lcd, state, values, layout=dash_setup.SCREEN_LAYOUT):
         draw_homeassistant_error(lcd)
         return
 
+    global _current_lcd
+    _current_lcd = lcd
+
     if is_fetching():
         background = "black"
     elif values.get("inverter_grid_status") == "Off-grid":
@@ -373,11 +385,19 @@ def render(lcd, state, values, layout=dash_setup.SCREEN_LAYOUT):
     image = Image.new("RGB", (128, 128), background)
     draw = ImageDraw.Draw(image)
 
+#    if state.mode == "confirm":
+#        dash_helpers.draw_confirmation_screen( draw, state.pending_action_label, FONT_SMALL )
+#    elif state.mode == "menu":
+#        MENU_ITEMS[5] = hidden_menu_label()
+#        dash_helpers.draw_vertical_menu(draw, MENU_ITEMS, state.menu_selected, FONT_SMALL)
+#    else:
     if state.mode == "confirm":
         dash_helpers.draw_confirmation_screen( draw, state.pending_action_label, FONT_SMALL )
     elif state.mode == "menu":
-        MENU_ITEMS[5] = hidden_menu_label()
         dash_helpers.draw_vertical_menu(draw, MENU_ITEMS, state.menu_selected, FONT_SMALL)
+    elif state.mode == "submenu":
+        poll_network_restart_status()
+        dash_helpers.draw_vertical_menu(draw, build_submenu_items(), state.menu_selected, FONT_SMALL)
     else:
         dash_screens.draw_screen(
             draw, state.active_screen, values, FONT_TINY, FONT_SMALL, FONT_VALUE, FONT_CONDENSED, layout
@@ -451,8 +471,34 @@ def hidden_menu_label():
 #   left          -> exit menu (cancel, screen unchanged)
 #   right/middle  -> activate the selected item
 
-MENU_ITEMS = ["« Ieşire", "1: Solar", "2: Temperaturi", "3: Parametri", "4: Spring", "", "Repornire Pi", "Oprire Pi"]
-MENU_SELECTABLE_INDEXES = [0, 1, 2, 3, 4, 5, 6, 7]
+#MENU_ITEMS = ["« Ieşire", "1: Solar", "2: Temperaturi", "3: Parametri", "4: Spring", "", "Repornire Pi", "Oprire Pi"]
+#MENU_SELECTABLE_INDEXES = [0, 1, 2, 3, 4, 5, 6, 7]
+MENU_ITEMS = ["« Ieşire", "1: Solar", "2: Temperaturi", "3: Parametri", "4: Spring", "5: Energie", "", "Avansat »"]
+MENU_SELECTABLE_INDEXES = [0, 1, 2, 3, 4, 5, 7]
+
+# Advanced submenu, opened from main menu item 7 ("Advanced >>").
+# Item 4 is left blank for future use.
+#
+# On items 2 (brightness) and 3 (refresh), left/right adjust the value
+# in place instead of moving the selection - see
+# DashboardState._handle_submenu_event.
+SUBMENU_SELECTABLE_INDEXES = [0, 1, 2, 3, 4, 5, 6, 7]
+
+
+def build_submenu_items():
+    """Build the Advanced submenu labels fresh each render, since three of
+    them show live state (network-restart status, brightness, refresh
+    interval, and the test-mode clock/uptime label)."""
+    return [
+        "« Înapoi",
+        get_network_restart_label("Repornire reţea"),
+        f"Luminozitate: {dash_setup.DAY_BRIGHTNESS}%",
+        f"Interval: {dash_setup.UPDATE_SECONDS}s",
+        "Repornire PiDash",
+        hidden_menu_label(),
+        "* Repornire Pi",
+        "* Oprire Pi",
+    ]
 
 # KEY1/2/3 are separate physical buttons from the joystick. Each jumps
 # straight to its mapped screen from anywhere (closing the menu if it's
@@ -470,11 +516,12 @@ class DashboardState:
     screen 1 after dash_setup.SCREEN_IDLE_TIMEOUT_SECONDS of inactivity."""
 
     def __init__(self):
-        self.mode = "screen"             # "screen" or "menu"
+        self.mode = "screen"             # "screen", "menu", "submenu", or "confirm"
         self.active_screen = 0           # 0-based index into dash_screens
-        self.menu_selected = 0           # index into MENU_ITEMS
+        self.menu_selected = 0           # index into MENU_ITEMS or the submenu items
         self.pending_action = None       # handle confirmation screen
         self.pending_action_label = ""   # single screen for multiple questions
+        self.confirm_return_mode = "menu"  # where "confirm" goes back to on cancel
         self.last_activity = time.monotonic()
 
     def touch(self):
@@ -485,6 +532,8 @@ class DashboardState:
 
         if idle_for >= dash_setup.SCREEN_IDLE_TIMEOUT_SECONDS:
             if self.mode != "screen" or self.active_screen != 0:
+                if self.mode == "submenu":
+                    clear_network_restart_label()
                 self.mode = "screen"
                 self.active_screen = 0
                 self.touch()
@@ -498,6 +547,8 @@ class DashboardState:
             self._handle_screen_event(button)
         elif self.mode == "menu":
             self._handle_menu_event(button)
+        elif self.mode == "submenu":
+            self._handle_submenu_event(button)
         elif self.mode == "confirm":
             self._handle_confirmation_event(button)
 
@@ -535,23 +586,71 @@ class DashboardState:
         if selection == 0:
             # < Exit
             self.mode = "screen"
-        elif 1 <= selection <= 4:
+        elif 1 <= selection <= 5:
             self.mode = "screen"
             self.active_screen = selection - 1
+        elif selection == 7:
+            # "Advanced >>"
+            self.mode = "submenu"
+            self.menu_selected = 0
+
+    def _handle_submenu_event(self, button):
+        # Items 2 (brightness) and 3 (refresh) use left/right to adjust
+        # their value in place instead of the usual back/confirm meaning.
+        if self.menu_selected == 2 and button in ("left", "right"):
+            self._adjust_brightness(button)
+        elif self.menu_selected == 3 and button in ("left", "right"):
+            self._adjust_refresh(button)
+        elif button == "left":
+            self._leave_submenu()
+        elif button == "up":
+            self.menu_selected = _step_submenu_selection(self.menu_selected, -1)
+        elif button == "down":
+            self.menu_selected = _step_submenu_selection(self.menu_selected, 1)
+        elif button in ("right", "middle"):
+            self._confirm_submenu_selection()
+
+    def _adjust_brightness(self, button):
+        step = 10 if button == "right" else -10
+        new_value = max(10, min(100, dash_setup.DAY_BRIGHTNESS + step))
+        dash_setup.DAY_BRIGHTNESS = new_value
+        dash_setup.NIGHT_BRIGHTNESS = new_value
+
+    def _adjust_refresh(self, button):
+        step = 1 if button == "right" else -1
+        dash_setup.UPDATE_SECONDS = max(3, min(20, dash_setup.UPDATE_SECONDS + step))
+
+    def _leave_submenu(self):
+        clear_network_restart_label()
+        self.mode = "menu"
+        self.menu_selected = 7  # land back on "Advanced >>"
+
+    def _confirm_submenu_selection(self):
+        selection = self.menu_selected
+
+        if selection == 0:
+            # « Înapoi
+            self._leave_submenu()
+        elif selection == 1:
+            restart_network()
+        elif selection == 4:
+            restart_script()
         elif selection == 5:
             dash_setup.TEST_MODE = not dash_setup.TEST_MODE
             #MENU_ITEMS[5] = hidden_menu_label()
         elif selection == 6:
           self.pending_action = restart_system
-          self.pending_action_label = MENU_ITEMS[6]
+          self.pending_action_label = "Repornire Pi"
+          self.confirm_return_mode = "submenu"
           self.mode = "confirm"
         elif selection == 7:
           self.pending_action = shutdown_system
-          self.pending_action_label = MENU_ITEMS[7]
+          self.pending_action_label = "Oprire Pi"
+          self.confirm_return_mode = "submenu"
           self.mode = "confirm"
 
     def _handle_confirmation_event(self, button):
-        if button == "middle":
+        if button in ("middle", "right"):
             action = self.pending_action
 
             self.pending_action = None
@@ -565,7 +664,7 @@ class DashboardState:
             # Cancel confirmation
             self.pending_action = None
             self.pending_action_label = ""
-            self.mode = "menu"
+            self.mode = self.confirm_return_mode
 
 
 def _step_menu_selection(current, direction):
@@ -573,12 +672,39 @@ def _step_menu_selection(current, direction):
     position = (position + direction) % len(MENU_SELECTABLE_INDEXES)
     return MENU_SELECTABLE_INDEXES[position]
 
+def _step_submenu_selection(current, direction):
+    position = SUBMENU_SELECTABLE_INDEXES.index(current)
+    position = (position + direction) % len(SUBMENU_SELECTABLE_INDEXES)
+    return SUBMENU_SELECTABLE_INDEXES[position]
+
 def restart_system():
+    if _current_lcd is not None:
+        image = Image.new("RGB", (128, 128), "black")
+        draw = ImageDraw.Draw(image)
+        dash_helpers.draw_hourglass_icon(draw, 64, 64, dash_setup.WHITE)
+        _current_lcd.display(image)
+
     os.system("sudo reboot")
     #return false
 
 def shutdown_system():
+    if _current_lcd is not None:
+        image = Image.new("RGB", (128, 128), "black")
+        draw = ImageDraw.Draw(image)
+        dash_helpers.draw_hourglass_icon(draw, 64, 64, dash_setup.WHITE)
+        _current_lcd.display(image)
+
     os.system("sudo shutdown now")
+    #return false
+
+def restart_script():
+    if _current_lcd is not None:
+        image = Image.new("RGB", (128, 128), "black")
+        draw = ImageDraw.Draw(image)
+        dash_helpers.draw_hourglass_icon(draw, 64, 64, dash_setup.WHITE)
+        _current_lcd.display(image)
+
+    os.system("sudo systemctl restart dashboard.service")
     #return false
 
 def get_pi_temperature():
@@ -589,7 +715,7 @@ def get_pi_temperature():
         return temperature
     except Exception:
         return 0.00
-		
+
 ##
 #   network detection block
 #
@@ -656,7 +782,76 @@ def get_current_wifi_ssid():
     except (OSError, subprocess.SubprocessError):
         return None
 
+##
+#   network restart (Advanced submenu item 1)
+#
+# restart_network() is intentionally left as a no-op for now - wire up the
+# actual system call once we've settled on NetworkManager vs
+# dhcpcd/wpa_supplicant for this device, e.g.:
+#   os.system("sudo systemctl restart NetworkManager")
+#
+# The label shown in the submenu updates itself: "Restarting network..."
+# immediately, then flips to "<SSID> / <IP>" once connectivity is back
+# (checked every NETWORK_RESTART_CHECK_INTERVAL seconds via
+# poll_network_restart_status(), called from render() while the submenu
+# is visible). The "connected" label then sticks until another restart is
+# triggered, or the submenu is left/times out (see DashboardState).
 
+NETWORK_RESTART_CHECK_INTERVAL = 3  # seconds between reachability re-checks
+
+_network_restart_pending = False
+_network_restart_label = None
+_network_restart_next_check = 0.0
+_current_lcd = None
+
+
+def restart_network():
+    """Kick off a network restart. No-op for now - see note above."""
+    global _network_restart_pending, _network_restart_label, _network_restart_next_check
+
+    # TODO: actually restart networking once we know the target stack.
+    # os.system("sudo systemctl restart NetworkManager")
+
+    _network_restart_pending = True
+    _network_restart_label = "Repornire reţea..."
+    _network_restart_next_check = time.monotonic() + NETWORK_RESTART_CHECK_INTERVAL
+
+
+def poll_network_restart_status():
+    """Call periodically (from render(), while the submenu might be
+    visible) to update the network-restart label once connectivity
+    returns."""
+    global _network_restart_pending, _network_restart_next_check, _network_restart_label
+
+    if not _network_restart_pending:
+        return
+
+    now = time.monotonic()
+    if now < _network_restart_next_check:
+        return
+
+    if is_on_required_network():
+        ssid = get_current_wifi_ssid()
+        ip = get_current_ipv4()
+        _network_restart_label = f"{ssid or '?'} / {ip or '?'}"
+        _network_restart_pending = False
+    else:
+        _network_restart_next_check = now + NETWORK_RESTART_CHECK_INTERVAL
+
+
+def get_network_restart_label(default):
+    """Return the current network-restart status label, or `default` if no
+    restart has been triggered (or its label has since been cleared)."""
+    return _network_restart_label or default
+
+
+def clear_network_restart_label():
+    """Drop the network-restart status label - called when the Advanced
+    submenu is left/times out, so a stale "Repornire reţea..." / SSID
+    label doesn't linger next time the submenu is opened."""
+    global _network_restart_pending, _network_restart_label
+    _network_restart_pending = False
+    _network_restart_label = None
 
 def draw_broken_wifi_icon(draw, x, y, size=64, color="red"):
     """Draw a wide Wi-Fi icon with three arcs and a thin break line."""
@@ -780,11 +975,9 @@ def draw_homeassistant_error(lcd):
         lcd,
         "Eroare",
         "Home Assistant",
-		"imposibil de conectat"
+        "imposibil de conectat"
     )
 
-
 # end network check block
-
 
 # FIN

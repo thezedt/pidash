@@ -15,9 +15,9 @@ def compute_brightness():
     minutes = now.tm_hour * 60 + now.tm_min
 
     # Quiet period: 23:30 through 07:30
-    if minutes >= 23 * 60 + 30 or minutes < 7 * 60 + 30:
-        return 25
-    return 100
+    if minutes >= 22 * 60 + 30 or minutes < 7 * 60 + 30:
+        return dash_setup.NIGHT_BRIGHTNESS
+    return dash_setup.DAY_BRIGHTNESS
 
 
 def main():
@@ -55,24 +55,31 @@ def main():
                     dash_functions.request_values_refresh()
                     last_sensor_poll = now
 
-                # Buttons are still polled every BUTTON_POLL_SECONDS for
-                # responsiveness, but the (expensive) actual redraw + SPI
-                # transfer only needs to happen when something that
-                # affects the image has actually changed.
-                signature = (
-                    state.mode,
-                    state.active_screen,
-                    state.menu_selected,
-                    getattr(state, "pending_action_label", None),
-                    dash_functions.is_fetching(),
-                    dash_functions.is_ha_reachable(),
-                    dash_functions.get_values_version(),
-                )
-
-                if signature != last_signature:
+                # Menu/submenu/confirm screens show live-updating content
+                # (a setting being adjusted, network-restart status, the
+                # test-mode clock) that isn't reflected in the signature
+                # below, so always redraw while one of them is visible.
+                # The sensor screens still use the change-gated signature,
+                # since that's where the CPU savings actually matter.
+                if state.mode in ("menu", "submenu", "confirm"):
                     values = dash_functions.get_latest_values()
                     dash_functions.render(lcd, state, values)
-                    last_signature = signature
+                    last_signature = None  # force a fresh check on return to a screen
+                else:
+                    signature = (
+                        state.mode,
+                        state.active_screen,
+                        state.menu_selected,
+                        getattr(state, "pending_action_label", None),
+                        dash_functions.is_fetching(),
+                        dash_functions.is_ha_reachable(),
+                        dash_functions.get_values_version(),
+                    )
+
+                    if signature != last_signature:
+                        values = dash_functions.get_latest_values()
+                        dash_functions.render(lcd, state, values)
+                        last_signature = signature
 
                 time.sleep(dash_setup.BUTTON_POLL_SECONDS)
 

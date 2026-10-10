@@ -9,9 +9,20 @@ import pigpio
 # -----------------------------
 # Version info/history
 # -----------------------------
-VERSION = "v0.2.2"
+VERSION = "v0.2.4"
+#
+# v0.2.4 - 20260919
+# * added script restart functionality in secondary menu; and "wait" screens after hard actions
+# * fixed menus redraw lag with sensors update cycle
+# * changed brightness control option to also apply at night time
+#
+# v0.2.3 - 20260916
+# * slight position and colors tweaking; changed direction arrows to triangles on energy screen
+# * added fan on icon indicator
 #
 # v0.2.2 - 20260913
+# * added 'energy' screen
+# * refactored main menu; added secondary menu with brightness and refresh controls
 # * optimized cpu usage by limiting rendering only on data changes
 #
 # v0.2.1 - 20260912
@@ -44,6 +55,8 @@ SENSORS = {
     "inverter_temp": "sensor.inverter_internal_temperature",
     "battery_bms_temp": "sensor.battery_1_temperature",
     "battery_avg_temp": "sensor.battery_1_average_temperature",
+    "inverter_fans_1": "switch.sonoff_10021e6428_1",
+    "inverter_fans_2": "switch.sonoff_10021e6428_2",
     # details & temps - screen 2
     "battery_pack1_avg_temp": "sensor.battery_1_pack_1_average_temperature",
     "battery_pack2_avg_temp": "sensor.battery_1_pack_2_average_temperature",
@@ -74,7 +87,13 @@ SENSORS = {
     "solar_estimate_today_r": "sensor.energy_production_today_remaining",
     "solar_estimate_tomorrow": "sensor.energy_production_tomorrow",
     "spring_temp": "sensor.shelly_blu_h_t_ble_temperature",
-
+    # energy - screen 5
+    "energy_solar_kwh": "sensor.meter_solar_energy_daily", #"sensor.inverter_total_dc_input_energy",
+    "energy_grid_import_kwh": "sensor.meter_grid_energy_daily_import", #"sensor.power_meter_consumption",
+    "energy_grid_export_kwh": "sensor.meter_grid_energy_daily_export", #"sensor.power_meter_exported",
+    "energy_house_kwh": "sensor.meter_house_energy_daily", #"sensor.shelly_pro_em50_energy_meter_home_total_active_energy",
+    "energy_battery_discharge_kwh": "sensor.batteries_day_discharge",
+    "energy_battery_charge_kwh": "sensor.batteries_day_charge",
 }
 
 UPDATE_SECONDS = 10
@@ -92,6 +111,12 @@ SCREEN_IDLE_TIMEOUT_SECONDS = 60
 # from overlap) or "single_line" (label/value share one line, more
 # compact but can overlap if a label is too long for its column).
 SCREEN_LAYOUT = "stacked"
+
+# Backlight brightness (10-100) for day and night, both adjustable at
+# runtime from the Advanced submenu's single brightness control (which
+# keeps them in sync - see DashboardState._adjust_brightness).
+DAY_BRIGHTNESS = 100
+NIGHT_BRIGHTNESS = 25
 
 # -----------------------------
 # Hardware
@@ -212,10 +237,14 @@ EXPORT_COLOR = (80, 100, 150)
 BATTERY_COLOR = (115, 70, 105)
 HOUSE_COLOR = (35, 35, 35)
 
-GREEN = (75, 135, 120)
-RED = (200, 20, 20)
+#GREEN = (75, 135, 120)
+GREEN = (100, 160, 145)
+#RED = (200, 20, 20)
+RED = (225, 45, 45)
 WARNING_COLOR = (255, 64, 64)
 BLUE = (70, 130, 220)
+#PURPLE = (150, 80, 190)
+PURPLE = (175, 105, 215)
 
 # Screen background while the inverter reports "Off-grid" (see
 # grid_status handling in dash_functions.render).

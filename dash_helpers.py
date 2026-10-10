@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Color-selection helpers, text formatting, and icon/arrow drawing primitives."""
 
+import math
 import dash_setup, dash_functions
 
 # -----------------------------
@@ -78,6 +79,12 @@ def volts(value):
         return "--"
 
     return f"{value:.1f} V"
+
+def kwh(value,arrow=""):
+    if value is None:
+        return "--"
+
+    return f"{arrow}{value:.1f} kWh"
 
 def watts(value):
     if value is None:
@@ -212,11 +219,11 @@ def draw_vertical_menu(draw, items, selected_index, font):
     text_height = bbox[3] - bbox[1]
 
     margin = 2
-    x = dash_setup.LCD_WIDTH - margin - text_width - 1
+    x = dash_setup.LCD_WIDTH - margin - text_width - 3
     y = dash_setup.LCD_HEIGHT - margin - text_height - 2
 
     draw.text( (x, y), text, fill=dash_setup.GREY, font=dash_functions.FONT_TINY )
-	
+
 def draw_confirmation_screen(draw, action_label, font):
     text = f"{action_label}?"
 
@@ -336,6 +343,82 @@ def draw_solar_icon(draw, x, y, color):
     rounded_ray(x + 2, y + 16, x + 5, y + 13)           # lower-left
     rounded_ray(x + 13, y + 13, x + 16, y + 16)         # lower-right
 
+def draw_fan_icon_(draw, x, y, color):
+    # Icon dimensions: approximately 20x20 pixels, same footprint as
+    # draw_solar_icon. 3 curved blades (pie slices) around a small dark
+    # hub, so they read as a fan/propeller rather than a solid triangle.
+    center_x = x + 9
+    center_y = y + 9
+    outer_radius = 9
+    hub_radius = 2
+    blade_span = 50  # degrees of arc per blade
+
+    bbox = (
+        center_x - outer_radius, center_y - outer_radius,
+        center_x + outer_radius, center_y + outer_radius,
+    )
+
+    for start_angle in (270, 30, 150):  # 3 blades, 120 degrees apart
+        draw.pieslice(
+            bbox, start_angle - blade_span / 2, start_angle + blade_span / 2, fill=color
+        )
+
+    draw.ellipse(
+        (center_x - hub_radius, center_y - hub_radius, center_x + hub_radius, center_y + hub_radius),
+        fill="black",
+    )
+
+def draw_fan_icon(draw, x, y, color):
+    # Icon dimensions: approximately 20x20 pixels, same footprint as
+    # draw_solar_icon. 3 petal-shaped blades (narrow at the hub and tip,
+    # wide in the middle) meeting at a shared center - reads as a
+    # propeller/fan, unlike flat pie-wedges which look like a radiation
+    # trefoil.
+    center_x = x + 9
+    center_y = y + 9
+    length = 8
+    half_width = 3
+
+    for angle_deg in (90, 210, 330):  # 3 blades, 120 degrees apart
+        angle = math.radians(angle_deg)
+        perp_angle = angle + math.radians(90)
+
+        tip_x = center_x + length * math.cos(angle)
+        tip_y = center_y - length * math.sin(angle)
+        mid_x = center_x + (length * 0.55) * math.cos(angle)
+        mid_y = center_y - (length * 0.55) * math.sin(angle)
+
+        dx = half_width * math.cos(perp_angle)
+        dy = half_width * math.sin(perp_angle)
+
+        draw.polygon(
+            [
+                (center_x, center_y),
+                (mid_x + dx, mid_y - dy),
+                (tip_x, tip_y),
+                (mid_x - dx, mid_y + dy),
+            ],
+            fill=color,
+        )
+
+    draw.ellipse(
+        (center_x - 2, center_y - 2, center_x + 2, center_y + 2),
+        fill=color,
+    )
+
+def draw_hourglass_icon(draw, cx, cy, color, width=40, height=50):
+    half_w = width // 2
+    half_h = height // 2
+    top = cy - half_h
+    bottom = cy + half_h
+    left = cx - half_w
+    right = cx + half_w
+    cap = 3
+
+    draw.rectangle((left, top, right, top + cap), fill=color)
+    draw.rectangle((left, bottom - cap, right, bottom), fill=color)
+    draw.polygon([(left, top + cap), (right, top + cap), (cx, cy)], fill=color)
+    draw.polygon([(cx, cy), (right, bottom - cap), (left, bottom - cap)], fill=color)
 
 def draw_house_icon_original(draw, x, y, color):
     draw.polygon(

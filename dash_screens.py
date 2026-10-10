@@ -4,7 +4,7 @@
 import dash_setup
 import dash_helpers
 
-SCREEN_NAMES = ["Solar", "Temps", "Params", "Spring"]
+SCREEN_NAMES = ["Solar", "Temps", "Params", "Spring", "Energy"]
 SCREEN_COUNT = len(SCREEN_NAMES)
 
 INVERTER_TEMP_WARN = 42
@@ -12,7 +12,7 @@ BATT_BMS_TEMP_WARN = 45
 BATT_AVG_TEMP_WARN = 42
 
 # number of pixels to offset value from label on two-row display
-VALUE_OFFSET = 24
+VALUE_OFFSET = 22
 
 
 def draw_screen(draw, index, values, font_tiny, font_small, font_value, font_condensed, layout="stacked"):
@@ -24,6 +24,8 @@ def draw_screen(draw, index, values, font_tiny, font_small, font_value, font_con
         draw_params_screen(draw, values, font_tiny, font_small, font_value, font_condensed, layout)
     elif index == 3:
         draw_spring_screen(draw, values, font_tiny, font_small, font_value, font_condensed, layout)
+    elif index == 4:
+        draw_energy_screen(draw, values, font_tiny, font_small, font_value)
     else:
         draw_placeholder_screen(draw, SCREEN_NAMES[index], font_value)
 
@@ -42,7 +44,7 @@ def draw_solar_screen(draw, values, font_tiny, font_small, font_value):
     else:
         offset = 0
     
-    solar_pos_x = 36
+    solar_pos_x = 31
     solar_pos_y = 3
 
     solar_color = dash_helpers.active_color(
@@ -86,6 +88,16 @@ def draw_solar_screen(draw, values, font_tiny, font_small, font_value):
             height=18,
         )
 
+    fan_1_on = str(values.get("inverter_fans_1")).lower() == "on"
+    fan_2_on = str(values.get("inverter_fans_2")).lower() == "on"
+
+    if fan_1_on or fan_2_on:
+        dash_helpers.draw_fan_icon(
+            draw,
+            solar_pos_x - offset * 2 - 20,
+            solar_pos_y + 3,
+            dash_setup.BLUE,
+        )
 
     ########################                     ########################
     #############   Left-middle: GRID            ########################
@@ -95,7 +107,7 @@ def draw_solar_screen(draw, values, font_tiny, font_small, font_value):
     grid_icon_color = dash_setup.WHITE
     grid_value_color = dash_setup.WHITE
     
-    grid_pos_x = 5
+    grid_pos_x = 0
     grid_pos_y = 35
 
     if grid_power is None:
@@ -184,7 +196,7 @@ def draw_solar_screen(draw, values, font_tiny, font_small, font_value):
 
     battery_power = values["battery_power"]
 
-    batt_pos_x = 29
+    batt_pos_x = 25
     batt_pos_y = 75
 
     # Battery label and arrow
@@ -324,8 +336,8 @@ def draw_temps_screen(draw, values, font_tiny, font_small, font_value, font_cond
 
     top = 2
     available_height = 116  # leaves room for the screen-indicator dots
-    col_x = [2, 66]
-    col_right = [62, 126]
+    col_x = [0, 66]
+    col_right = [60, 126]
 
     rows_per_col = -(-len(rows) // 2)  # ceil division, supports up to ~7 rows/14 values
     row_height = max(12, available_height // rows_per_col)
@@ -508,6 +520,93 @@ def draw_spring_screen(draw, values, font_tiny, font_small, font_value, font_con
             )
         else:
             draw.text((x_value + VALUE_OFFSET, value_y), text, fill=color, font=font_condensed)
+
+    ########################                        ########################
+    ########################    5: ENERGY SCREEN     ########################
+    ########################                        ########################
+
+def draw_energy_screen(draw, values, font_tiny, font_small, font_value):
+    # Cumulative energy for the day, cloned from the Solar screen's
+    # top/left/right/bottom layout. No arrows and no color-by-value here -
+    # just fixed colors as specified. Positions copied as-is from
+    # draw_solar_screen; adjust labels/positions later if anything overlaps.
+
+    ######################## Top: SOLAR ########################
+
+    solar_pos_x = 20
+    solar_pos_y = 3
+
+    dash_helpers.draw_solar_icon(draw, solar_pos_x, solar_pos_y, dash_setup.SOLAR_ACTIVE_COLOR)
+
+    dash_helpers.text_center(
+        draw,
+        (solar_pos_x + 56, solar_pos_y + 2),  # LEFT,TOP
+        dash_helpers.kwh(values.get("energy_solar_kwh")),
+        dash_setup.SOLAR_ACTIVE_COLOR,
+        font_value,
+    )
+
+    ######################## Left-middle: GRID ########################
+
+    grid_pos_x = 0
+    grid_pos_y = 35
+
+    dash_helpers.draw_grid_icon(draw, grid_pos_x, grid_pos_y, dash_setup.WHITE)
+
+    draw.text(
+        (grid_pos_x, grid_pos_y + 20),  # LEFT,TOP
+        dash_helpers.kwh(values.get("energy_grid_import_kwh"),"\u25BA "), # →
+        fill=dash_setup.PURPLE,
+        font=font_small,
+    )
+
+    draw.text(
+        (grid_pos_x, grid_pos_y + 34),  # second line, below the first
+        dash_helpers.kwh(values.get("energy_grid_export_kwh"),"\u25C4 "), # ←
+        fill=dash_setup.GREEN,
+        font=font_small,
+    )
+
+    ######################## Right-middle: HOUSE ########################
+
+    house_pos_x = 75
+    house_pos_y = 30
+    right_edge_x = 127  # Last pixel of a 128px-wide screen
+
+    dash_helpers.draw_house_icon(draw, house_pos_x + 25, house_pos_y, dash_setup.WHITE)
+
+    house_text = dash_helpers.kwh(values.get("energy_house_kwh"))
+
+    bbox = draw.textbbox((0, 0), house_text, font=font_value)
+    text_width = bbox[2] - bbox[0]
+
+    draw.text(
+        (right_edge_x - text_width, house_pos_y + 20),
+        house_text,
+        fill=dash_setup.WHITE,
+        font=font_value,
+    )
+
+    ######################## Center-bottom: BATTERY ########################
+
+    batt_pos_x = 15
+    batt_pos_y = 85
+
+    dash_helpers.draw_battery_icon(draw, batt_pos_x + 13, batt_pos_y + 6, dash_setup.WHITE)
+
+    draw.text(
+        (batt_pos_x + 35, batt_pos_y + 1),
+        dash_helpers.kwh(values.get("energy_battery_discharge_kwh"),"\u25BA "), # →
+        fill=dash_setup.PURPLE,
+        font=font_small,
+    )
+
+    draw.text(
+        (batt_pos_x + 35, batt_pos_y + 14),  # second line, below the first
+        dash_helpers.kwh(values.get("energy_battery_charge_kwh"),"\u25C4 "), # ←
+        fill=dash_setup.GREEN,
+        font=font_small,
+    )
 
 def draw_placeholder_screen(draw, name, font_value):
     dash_helpers.text_center(draw, (64, 60), name, dash_setup.WHITE, font_value)
