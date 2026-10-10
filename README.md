@@ -3,6 +3,8 @@
 
 A dashboard for displaying sensor data on a Waveshare 1.44-inch LCD HAT (model 13891).
 
+![Dashboard Solar Screen](/assets/dashboard.jpg)
+
 ---
 
 ## File Structure
@@ -40,6 +42,8 @@ A dashboard for displaying sensor data on a Waveshare 1.44-inch LCD HAT (model 1
 - **Buttons**: 8 inputs (4 axis joystick with middle button + 3 separate keys)
 - **Dependencies**: `luma.lcd`, `RPi.GPIO`, `pigpio`, `Pillow`
 
+![The Hardware](/assets/hardware.jpg)
+
 ### Home Assistant Integration
 - Reads **40+ sensors** in a single API call (`/api/states`)
 - Background threading for non-blocking updates
@@ -54,7 +58,7 @@ A dashboard for displaying sensor data on a Waveshare 1.44-inch LCD HAT (model 1
 
 ---
 
-## How to Use This Code
+## How to Use
 
 > [!WARNING]
 > **Note**: This code is **seriously** hardcoded for my specific setup, sensors configuration and IDs, devices and requirements. Will require extensive configuration, adjusting and testing to fit your usage case.
@@ -87,7 +91,7 @@ REQUIRED_NETWORK = ipaddress.ip_network("192.168.1.0/24")
 ```
 
 
-### Run the Dashboard to test
+### Test the Dashboard
 ```bash
 cd /path/to/pidash
 python3 dashboard.py
@@ -113,5 +117,11 @@ Then:
 ```bash
 sudo systemctl enable --now dashboard.service
 ```
+
+---
+
+![Dashboard Temps Screen](/assets/dashboard-2.jpg)
+
+![Dashboard Energy Screen](/assets/dashboard-3.jpg)
 
 ---
