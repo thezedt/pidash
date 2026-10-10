@@ -1,7 +1,87 @@
 #!/usr/bin/env python3
-"""Simple monochrome-style icons and arrows used on the dashboard."""
+"""Color-selection helpers, text formatting, and icon/arrow drawing primitives."""
 
-import formatting
+import dash_setup
+
+# -----------------------------
+# Color helpers
+# -----------------------------
+
+
+def active_color(value, threshold, active, idle=dash_setup.IDLE_COLOR, strict=False):
+    """
+    Return `active` when abs(value) crosses `threshold`, else `idle`.
+
+    strict=True uses a ">" comparison (matches the old arrow-color checks),
+    strict=False (default) uses ">=" (matches the old solar-color check).
+    """
+    if value is None:
+        return idle
+
+    absolute = abs(value)
+    crossed = absolute > threshold if strict else absolute >= threshold
+
+    return active if crossed else idle
+
+
+def over_limit_color(value, limit, over_color=dash_setup.RED, default_color=dash_setup.WHITE):
+    """Return `over_color` if value is at/above `limit`, else `default_color`."""
+    if value is not None and value >= limit:
+        return over_color
+    return default_color
+
+
+# -----------------------------
+# Formatting helpers
+# -----------------------------
+
+
+def watts(value):
+    if value is None:
+        return "--"
+
+    absolute = abs(value)
+
+    if absolute >= 1000:
+        return f"{value / 1000:.2f} kW"
+
+    return f"{value:.0f} W"
+
+
+def watts_abs(value):
+    if value is None:
+        return "--"
+
+    absolute = abs(value)
+
+    if absolute >= 1000:
+        return f"{absolute / 1000:.2f} kW"
+
+    return f"{absolute:.0f} W"
+
+
+def format_runtime(minutes):
+    if minutes is None:
+        return "   \u221e"
+
+    try:
+        total_minutes = int(float(minutes))
+    except (ValueError, TypeError):
+        return "   X"
+
+    if total_minutes < 0:
+        total_minutes = 0
+
+    hours = total_minutes // 60
+    remaining_minutes = total_minutes % 60
+
+    return f"{hours}h {remaining_minutes:02d}m"
+
+
+def text_center(draw, xy, text, fill, font):
+    width = draw.textbbox((0, 0), text, font=font)[2]
+    draw.text((xy[0] - width / 2, xy[1]), text, fill=fill, font=font)
+
 
 # -----------------------------
 # Simple monochrome-style icons
@@ -63,14 +143,39 @@ def draw_solar_icon(draw, x, y, color):
     rounded_ray(x + 13, y + 13, x + 16, y + 16)         # lower-right
 
 
-def draw_house_icon(draw, x, y, color):
+def draw_house_icon_original(draw, x, y, color):
     draw.polygon(
         [(x, y + 8), (x + 9, y), (x + 18, y + 8)],
         fill=color,
     )
     draw.rectangle((x + 3, y + 8, x + 15, y + 18), fill=color)
     draw.rectangle((x + 8, y + 12, x + 11, y + 18), fill="black")
+	
+def draw_house_icon(draw, x, y, color):
+    draw.polygon(
+        [(x, y + 8), (x + 9, y), (x + 18, y + 8)],
+        fill=color,
+    )
+    draw.rectangle((x + 3, y + 7, x + 15, y + 18), fill=color)
+    draw.rectangle((x + 6, y + 10, x + 12, y + 18), fill="black")
 
+def draw_house_icon_outline(draw, x, y, color):
+    draw.polygon(
+        [(x, y + 8), (x + 9, y), (x + 18, y + 8)],
+        outline=color,
+    )
+    draw.rectangle((x + 3, y + 8, x + 15, y + 18), outline=color)
+    draw.rectangle((x + 8, y + 12, x + 11, y + 18), outline=color)
+	
+def draw_house_icon_outline2x(draw, x, y, color):
+    draw.line((x, y + 8, x + 9, y), fill=color, width=2)
+    draw.line((x + 9, y, x + 18, y + 8), fill=color, width=2)
+    draw.line((x + 3, y + 8, x + 3, y + 18), fill=color, width=2)
+    draw.line((x + 15, y + 8, x + 15, y + 18), fill=color, width=2)
+    draw.line((x + 3, y + 18, x + 8, y + 18), fill=color, width=2)
+    draw.line((x + 11, y + 18, x + 15, y + 18), fill=color, width=2)
+    draw.line((x + 8, y + 12, x + 8, y + 18), fill=color, width=2)
+    draw.line((x + 11, y + 12, x + 11, y + 18), fill=color, width=2)
 
 def draw_battery_icon(draw, x, y, color):
     draw.rectangle((x + 2, y + 2, x + 13, y + 17), outline=color)
@@ -87,7 +192,7 @@ def draw_grid_icon(draw, x, y, color):
 
 def draw_power_flow(draw, x, y, value, color, icon, font):
     icon(draw, x, y, color)
-    draw.text((x + 23, y + 2), formatting.watts(value), fill=color, font=font)
+    draw.text((x + 23, y + 2), watts(value), fill=color, font=font)
 
 
 def draw_vertical_arrow(draw, x, y, direction, color):
