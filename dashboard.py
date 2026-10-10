@@ -22,14 +22,24 @@ def compute_brightness():
 
 def main():
     backlight_pwm = dash_setup.setup_backlight()
-    dash_setup.setup_buttons()
     lcd = dash_setup.setup_lcd()
 
-    state = dash_functions.DashboardState()
-    values = {}
-    last_sensor_poll = 0.0
-
     try:
+        # Do not initialize buttons or contact Home Assistant until the
+        # Pi has an IPv4 address in the required network range.
+        while not dash_functions.is_on_required_network():
+            dash_functions.draw_network_error(lcd)
+            time.sleep(2)
+
+        dash_setup.setup_buttons()
+        state = dash_functions.DashboardState()
+        last_sensor_poll = 0.0
+        last_signature = None
+
+        # One-time blocking read so there's data to show immediately; every
+        # refresh after this happens on a background thread (see
+        # dash_functions.request_values_refresh) so it never blocks buttons.
+        dash_functions.set_latest_values(dash_functions.read_values())
         while True:
             try:
                 for button in dash_functions.read_button_events():
@@ -42,10 +52,27 @@ def main():
                     backlight_pwm.set_PWM_dutycycle(
                         dash_setup.BACKLIGHT_PIN, compute_brightness()
                     )
-                    values = dash_functions.read_values()
+                    dash_functions.request_values_refresh()
                     last_sensor_poll = now
 
-                dash_functions.render(lcd, state, values)
+                # Buttons are still polled every BUTTON_POLL_SECONDS for
+                # responsiveness, but the (expensive) actual redraw + SPI
+                # transfer only needs to happen when something that
+                # affects the image has actually changed.
+                signature = (
+                    state.mode,
+                    state.active_screen,
+                    state.menu_selected,
+                    getattr(state, "pending_action_label", None),
+                    dash_functions.is_fetching(),
+                    dash_functions.is_ha_reachable(),
+                    dash_functions.get_values_version(),
+                )
+
+                if signature != last_signature:
+                    values = dash_functions.get_latest_values()
+                    dash_functions.render(lcd, state, values)
+                    last_signature = signature
 
                 time.sleep(dash_setup.BUTTON_POLL_SECONDS)
 
@@ -53,6 +80,7 @@ def main():
                 dash_functions.draw_error(lcd, error)
                 print("Dashboard crashed:")
                 traceback.print_exc()
+                last_signature = None  # force a redraw next tick
 
     except KeyboardInterrupt:
         print("Stopped by user")
@@ -67,3 +95,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# FIN

@@ -7,6 +7,27 @@ from luma.lcd.device import st7735
 import pigpio
 
 # -----------------------------
+# Version info/history
+# -----------------------------
+VERSION = "v0.2.2"
+#
+# v0.2.2 - 20260913
+# * optimized cpu usage by limiting rendering only on data changes
+#
+# v0.2.1 - 20260912
+# * added handling of network issues and HAS unavailability
+# * added spring autonomy km sensor
+# * fixed invalid colors for negative grid power
+# * fixed display/handling of negative (charging) battery time estimate
+#
+# v0.2 - 20260909
+# * beta state, all screen finalized, most functionality tested
+#
+# v0.1 - 20260904 
+# * first alpha, only home screen with most of the info
+#
+
+# -----------------------------
 # Sensors
 # -----------------------------
 SENSORS = {
@@ -18,7 +39,8 @@ SENSORS = {
     "battery_limit": "number.batteries_backup_power_soc",
     "grid_power": "sensor.power_meter_active_power_inverted",  # negative for export, positive for import
     "grid_voltage": "sensor.failsafe_grid_voltage",
-    "battery_runtime": "sensor.battery_time_remaining",
+    ##"grid_status": "sensor.inverter_off_grid_status",
+    "battery_runtime": "sensor.battery_time_remaining",  # minutes !
     "inverter_temp": "sensor.inverter_internal_temperature",
     "battery_bms_temp": "sensor.battery_1_temperature",
     "battery_avg_temp": "sensor.battery_1_average_temperature",
@@ -27,30 +49,35 @@ SENSORS = {
     "battery_pack2_avg_temp": "sensor.battery_1_pack_2_average_temperature",
     "outside_temp": "sensor.ewelink_snzb_02p_temperature",
     "outside_hum": "sensor.ewelink_snzb_02p_humidity",
-#    "hallway_temp": "sensor.hallway_temp_hum_3_temperature",
-#    "hallway_hum": "sensor.hallway_temp_hum_3_humidity",
+    "outside2_temp": "sensor.sonoff_snzb_02p_3_temperature",
+    "outside2_hum": "sensor.sonoff_snzb_02p_3_humidity",
+    "hallway_temp": "sensor.hallway_temp_hum_3_temperature",
+    "hallway_hum": "sensor.hallway_temp_hum_3_humidity",
     "pantry_temp": "sensor.sonoff_snzb_02p_4_temperature",
     "pantry_hum": "sensor.sonoff_snzb_02p_4_humidity",
     "attic_temp": "sensor.ts0201_h_t_z_1_temperature",
-    # extras - screen 3?
+    "bicaz_temp": "sensor.bicaz_temp_hum_iv_temperature",
+    # extras - screen 3
     "inverter_derating": "number.inverter_power_derating",
-    "inverter_grid_status": "sensor.inverter_off_grid_status",
-    "inverter_": "sensor.inverter_off_grid_status",
+    "inverter_grid_status": "sensor.inverter_off_grid_status", # ["On-Grid", "Off-Grid"]
     "battery_backup_level": "number.batteries_backup_power_soc",
     "battery_charge_power": "number.batteries_maximum_charging_power",
     "battery_discharge_power": "number.batteries_maximum_discharging_power",
-    # spring - screen 4?
+    # spring - screen 4
     "spring_battery_level": "sensor.battery",
-    "spring_charge_status": "binary_sensor.charging",
+    "spring_charge_status": "binary_sensor.charging", # binary: ["on", "off]
     "spring_charge_power": "sensor.feyree_ev_charger_power_in_watts",
     "spring_charge_current": "number.feyree_ev_charger_set_charge_current",
     "spring_time_to_limit": "sensor.spring_time_remaining_2", # string !
     "spring_kwh_to_limit": "sensor.spring_charge_capacity_remaining",
+    "spring_autonomy": "sensor.battery_autonomy",
+    "solar_estimate_today_r": "sensor.energy_production_today_remaining",
+    "solar_estimate_tomorrow": "sensor.energy_production_tomorrow",
     "spring_temp": "sensor.shelly_blu_h_t_ble_temperature",
 
 }
 
-UPDATE_SECONDS = 5
+UPDATE_SECONDS = 10
 
 # How often the button/joystick state is polled.
 BUTTON_POLL_SECONDS = 0.05
@@ -60,6 +87,11 @@ BUTTON_DEBOUNCE_SECONDS = 0.15
 
 # Idle time (no button presses) before the dashboard returns to screen 1.
 SCREEN_IDLE_TIMEOUT_SECONDS = 60
+
+# Layout for the Params/Spring screens: "stacked" (label above value, safe
+# from overlap) or "single_line" (label/value share one line, more
+# compact but can overlap if a label is too long for its column).
+SCREEN_LAYOUT = "stacked"
 
 # -----------------------------
 # Hardware
@@ -90,6 +122,9 @@ KEY_PRESS_PIN = 13
 KEY1_PIN = 21
 KEY2_PIN = 20
 KEY3_PIN = 16
+
+# Test mode state (triggered by hidden menu item 5)
+TEST_MODE = False
 
 BUTTON_PINS = {
     "up": KEY_UP_PIN,
@@ -179,4 +214,11 @@ HOUSE_COLOR = (35, 35, 35)
 
 GREEN = (75, 135, 120)
 RED = (200, 20, 20)
+WARNING_COLOR = (255, 64, 64)
 BLUE = (70, 130, 220)
+
+# Screen background while the inverter reports "Off-grid" (see
+# grid_status handling in dash_functions.render).
+GRID_ALERT_BG_COLOR = (120, 0, 0)
+
+# FIN

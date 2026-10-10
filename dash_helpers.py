@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Color-selection helpers, text formatting, and icon/arrow drawing primitives."""
 
-import dash_setup
+import dash_setup, dash_functions
 
 # -----------------------------
 # Color helpers
@@ -28,8 +28,46 @@ def over_limit_color(value, limit, over_color=dash_setup.RED, default_color=dash
     """Return `over_color` if value is at/above `limit`, else `default_color`."""
     if value is not None and value >= limit:
         return over_color
+    elif value is not None and abs(value) < 30 :         # abs() to cover both directions for low power
+        return dash_setup.IDLE_COLOR
     return default_color
 
+
+def value_color(value, default=None, value_type="", warn=None):
+    """Shared coloring rule for the Temps/Params/Spring screens:
+
+    - value_type == "temp": BLUE below 10 degrees, RED at/above the alert
+      threshold (`warn` if given, else `default` - Params reuses its
+      set-point field as the threshold), else LIGHT_GREY.
+    - otherwise: GREEN if `value` differs from `default` (when `default`
+      is given), else LIGHT_GREY.
+    """
+    if value is None:
+        return dash_setup.LIGHT_GREY
+
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return dash_setup.LIGHT_GREY
+
+    if value_type == "temp":
+        if value < 10:
+            return dash_setup.BLUE
+
+        threshold = warn if warn is not None else default
+        if threshold is not None and value >= threshold:
+            return dash_setup.RED
+
+        return dash_setup.LIGHT_GREY
+
+    if default is not None:
+        try:
+            if value != float(default):
+                return dash_setup.GREEN
+        except (TypeError, ValueError):
+            pass
+
+    return dash_setup.LIGHT_GREY
 
 # -----------------------------
 # Formatting helpers
@@ -67,25 +105,88 @@ def watts_abs(value):
 
 def format_runtime(minutes):
     if minutes is None:
-        return "   \u221e"
+        return "      \u221e"
 
     try:
         total_minutes = int(float(minutes))
     except (ValueError, TypeError):
-        return "   X"
+        return "      Err"
 
     if total_minutes < 0:
-        total_minutes = 0
+        sign = "- "
+        total_minutes = abs(total_minutes)
+    else:
+        sign = "  "
 
     hours = total_minutes // 60
     remaining_minutes = total_minutes % 60
 
-    return f"{hours}h {remaining_minutes:02d}m"
+    return f"{sign}{hours}h {remaining_minutes:02d}m"
 
 
 def text_center(draw, xy, text, fill, font):
     width = draw.textbbox((0, 0), text, font=font)[2]
     draw.text((xy[0] - width / 2, xy[1]), text, fill=fill, font=font)
+
+# -----------------------------
+# Layout helpers
+# -----------------------------
+
+
+def two_column_positions(count, top=2, available_height=116, col_x=(2, 66), col_right=(62, 126)):
+    """Yield (index, x_label, x_value_right, text_y) laying `count` label/
+    value rows out into 2 columns, matching the Temps screen's grid. Row
+    height scales down to fit up to ~7 rows (14 items) per screen; the
+    bottom margin (available_height) leaves room for the screen-indicator
+    dots."""
+    rows_per_col = -(-count // 2)  # ceil division
+    row_height = max(12, available_height // rows_per_col)
+
+    for index in range(count):
+        column = index // rows_per_col
+        row = index % rows_per_col
+        row_top = top + row * row_height
+        text_y = row_top + (row_height - 9) / 2
+        yield index, col_x[column], col_right[column], text_y
+
+
+def two_column_row_blocks(count, top=2, available_height=116, col_x=(2, 66)):
+    """Yield (index, x, row_top, row_height) for `count` items laid out in
+    2 columns, same grid as two_column_positions. Unlike that function,
+    this hands back the full row block instead of one centered text
+    baseline, so the caller can stack multiple lines (e.g. label above
+    value) inside it - needed when label+value combined are too wide for
+    a single 64px-wide line at a readable font size."""
+    rows_per_col = -(-count // 2)  # ceil division
+    row_height = max(12, available_height // rows_per_col)
+
+    for index in range(count):
+        column = index // rows_per_col
+        row = index % rows_per_col
+        row_top = top + row * row_height
+        yield index, col_x[column], row_top, row_height
+
+def layout_positions(count, layout="stacked"):
+    """Yield (index, x_label, label_y, x_value, value_y, align) for `count`
+    label/value rows, in the same 2-column grid used by the Temps/Params/
+    Spring screens. `layout` selects how each row is drawn:
+
+    - "stacked" (default): label above value, both left-aligned. Needed
+      when label+value combined are too wide for a single line at a
+      readable font size.
+    - "single_line": label and value share one line, value right-aligned
+      to the column's right edge. More compact, but can overlap if the
+      label is too long for the remaining column width.
+
+    `align` is "left" or "right" and tells the caller how to interpret
+    `x_value`: for "left", start the value text there; for "right", align
+    the value text's right edge against it (subtract its own width)."""
+    if layout == "stacked":
+        for index, x, row_top, row_height in two_column_row_blocks(count):
+            yield index, x, row_top, x, row_top + 12, "left"
+    else:
+        for index, x_label, x_value_right, text_y in two_column_positions(count):
+            yield index, x_label, text_y, x_value_right, text_y, "right"
 
 
 def draw_vertical_menu(draw, items, selected_index, font):
@@ -102,6 +203,31 @@ def draw_vertical_menu(draw, items, selected_index, font):
 
         if label:
             draw.text((8, y + 2), label, fill=dash_setup.WHITE, font=font)
+
+    # version info at top-right corner
+    text = dash_setup.VERSION
+    bbox = draw.textbbox( (0, 0), text, font=dash_functions.FONT_TINY )
+
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+
+    margin = 2
+    x = dash_setup.LCD_WIDTH - margin - text_width - 1
+    y = dash_setup.LCD_HEIGHT - margin - text_height - 2
+
+    draw.text( (x, y), text, fill=dash_setup.GREY, font=dash_functions.FONT_TINY )
+	
+def draw_confirmation_screen(draw, action_label, font):
+    text = f"{action_label}?"
+
+    bbox = draw.textbbox((0, 0), text, font=font)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+
+    x = (dash_setup.LCD_WIDTH - text_width) // 2
+    y = (dash_setup.LCD_HEIGHT - text_height) // 2
+
+    draw.text( (x, y), text, fill=dash_setup.WHITE, font=font )
 
 def draw_screen_indicator_botright(draw, current, total, font):
     """Draw a small 'current/total' box in the bottom-right corner."""
@@ -218,7 +344,7 @@ def draw_house_icon_original(draw, x, y, color):
     )
     draw.rectangle((x + 3, y + 8, x + 15, y + 18), fill=color)
     draw.rectangle((x + 8, y + 12, x + 11, y + 18), fill="black")
-	
+    
 def draw_house_icon(draw, x, y, color):
     draw.polygon(
         [(x, y + 8), (x + 9, y), (x + 18, y + 8)],
@@ -234,7 +360,7 @@ def draw_house_icon_outline(draw, x, y, color):
     )
     draw.rectangle((x + 3, y + 8, x + 15, y + 18), outline=color)
     draw.rectangle((x + 8, y + 12, x + 11, y + 18), outline=color)
-	
+    
 def draw_house_icon_outline2x(draw, x, y, color):
     draw.line((x, y + 8, x + 9, y), fill=color, width=2)
     draw.line((x + 9, y, x + 18, y + 8), fill=color, width=2)
@@ -391,8 +517,70 @@ def draw_icon_thermometer(draw, x, y, size, color):
         fill=color,
     )
 
+def draw_thermometer_warning(draw, x, y, color, width=6, height=18):
+    """Draw a compact thermometer icon."""
+    bulb_radius = 3
+    stem_width = 2
+
+    bulb_center_x = x + width // 2
+    bulb_center_y = y + height - bulb_radius
+
+    # Thermometer stem
+    stem_left = bulb_center_x - stem_width // 2
+    stem_top = y + 2
+    stem_bottom = bulb_center_y
+
+    draw.rounded_rectangle(
+        (
+            stem_left,
+            stem_top,
+            stem_left + stem_width,
+            stem_bottom,
+        ),
+        radius=stem_width // 2,
+        fill=color,
+    )
+
+    # Thermometer bulb
+    draw.ellipse(
+        (
+            bulb_center_x - bulb_radius,
+            bulb_center_y - bulb_radius,
+            bulb_center_x + bulb_radius,
+            bulb_center_y + bulb_radius,
+        ),
+        fill=color,
+    )
+
 
 def draw_icon_percent(draw, x, y, size, color):
     draw.line((x, y + size, x + size, y), fill=color, width=1)
     draw.ellipse((x, y, x + 2, y + 2), outline=color)
     draw.ellipse((x + size - 2, y + size - 2, x + size, y + size), outline=color)
+
+
+# -----------------------------
+# Network Status icons
+# -----------------------------
+
+def draw_wireless_icon(draw, x, y, size, color):
+    """RSS/wifi-style icon: a dot at the bottom-left corner with two bold
+    quarter-arcs sweeping toward the upper-right, anchored at (x, y) as the
+    icon's bottom-left corner. Used to show a background sync (e.g. a Home
+    Assistant fetch) is in progress."""
+    cx = x
+    cy = y + size
+
+    dot_radius = max(1, round(size * 0.12))
+    draw.ellipse(
+        (cx - dot_radius, cy - dot_radius, cx + dot_radius, cy + dot_radius),
+        fill=color,
+    )
+
+    stroke_width = 1
+
+    for radius in (size * 0.35, size * 0.70):
+        bbox = (cx - radius, cy - radius, cx + radius, cy + radius)
+        draw.arc(bbox, start=260, end=370, fill=color, width=stroke_width)
+
+# FIN
