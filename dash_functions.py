@@ -3,16 +3,20 @@
 
 ### needs packages: 
 ###     fonts-dejavu-core 
+###     fonts-dejavu-extra
 ###     pigpio python3-pigpio
 ###
 ### systemctl enable --now pigpiod
 
 from PIL import Image, ImageDraw, ImageFont
 import requests
+import os
+import time
 
 import dash_config
 import dash_setup
 import dash_helpers
+import dash_screens
 
 # -----------------------------
 # Fonts
@@ -27,10 +31,14 @@ try:
     FONT_VALUE = ImageFont.truetype(
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14
     )
+    FONT_CONDENSED = ImageFont.truetype(
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed.ttf", 11
+    )
 except OSError:
     FONT_TINY = ImageFont.load_default()
     FONT_SMALL = FONT_TINY
     FONT_VALUE = FONT_SMALL
+    FONT_CONDENSED = FONT_TINY
 
 
 # -----------------------------
@@ -93,190 +101,144 @@ def draw_error(lcd, error):
     lcd.display(image)
 
 
-def draw_dashboard(lcd, values):
+def render(lcd, state, values):
     image = Image.new("RGB", (128, 128), "black")
     draw = ImageDraw.Draw(image)
 
-    #                     #
-    #     Top: SOLAR      #
-    #                     #
-    solar_power = values["solar"]
-
-    # handle value length
-    if len(dash_helpers.watts(values["solar"])) > 3:
-        offset = 4
+    if state.mode == "menu":
+        dash_helpers.draw_vertical_menu(draw, MENU_ITEMS, state.menu_selected, FONT_SMALL)
     else:
-        offset = 0
-
-    solar_color = dash_helpers.active_color(
-        solar_power, 100, dash_setup.SOLAR_ACTIVE_COLOR, dash_setup.SOLAR_IDLE_COLOR
-    )
-
-    dash_helpers.draw_solar_icon(draw, 36 - offset * 2, 3, solar_color)
-
-    dash_helpers.text_center(
-        draw,
-        (72 + offset, 5),  # LEFT,TOP
-        dash_helpers.watts(values["solar"]),
-        solar_color,
-        FONT_VALUE,
-    )
-
-    #                     #
-    #  Left-middle: GRID  #
-    #                     #
-    grid_power = values["grid_power"]
-    grid_icon_color = dash_setup.WHITE
-    grid_value_color = dash_setup.WHITE
-
-    if grid_power is None:
-        # invalid data
-        grid_text = "--"
-        grid_label_color = dash_setup.IDLE_COLOR
-        grid_icon_color = dash_setup.IDLE_COLOR
-        grid_value_color = dash_setup.IDLE_COLOR
-
-    elif grid_power == 0:
-        # Skip arrow on zero grid
-        grid_text = dash_helpers.watts_abs(grid_power)
-        grid_label_color = dash_setup.IDLE_COLOR
-        grid_icon_color = dash_setup.IDLE_COLOR
-        grid_value_color = dash_setup.IDLE_COLOR
-
-    elif grid_power > 0:
-        # Positive means importing from the grid
-        grid_text = dash_helpers.watts_abs(grid_power)
-        grid_label_color = dash_setup.RED
-
-        arrow_color = dash_helpers.active_color(
-            grid_power, 100, dash_setup.RED, dash_setup.GREY, strict=True
+        dash_screens.draw_screen(
+            draw, state.active_screen, values, FONT_TINY, FONT_SMALL, FONT_VALUE, FONT_CONDENSED
+        )
+        dash_helpers.draw_screen_indicator(
+            draw, state.active_screen + 1, dash_screens.SCREEN_COUNT, FONT_TINY
         )
 
-        dash_helpers.draw_horizontal_arrow(draw, 25, 30, "right", arrow_color)
-
-    else:
-        # Negative means exporting to the grid
-        grid_text = dash_helpers.watts_abs(grid_power)
-        grid_label_color = dash_setup.GREEN
-
-        arrow_color = dash_helpers.active_color(
-            grid_power, 100, dash_setup.GREEN, dash_setup.GREY, strict=True
-        )
-
-        dash_helpers.draw_horizontal_arrow(draw, 25, 30, "left", arrow_color)
-
-    dash_helpers.draw_grid_icon(draw, 5, 23, grid_icon_color)
-
-    grid_value_color = dash_helpers.over_limit_color(
-        grid_power, 1000, dash_setup.RED, grid_value_color
-    )
-
-    draw.text(
-        (5, 43),  # LEFT,TOP
-        grid_text,
-        fill=grid_value_color,
-        font=FONT_VALUE,
-    )
-
-    #                       #
-    #  Right-middle: HOUSE  #
-    #                       #
-    dash_helpers.draw_house_icon(draw, 90, 23, dash_setup.WHITE)
-
-    house_power = values["house"]
-    house_value_color = dash_helpers.over_limit_color(
-        house_power, 1000, dash_setup.RED, dash_setup.WHITE
-    )
-
-    draw.text(
-        (75, 43),
-        dash_helpers.watts(values["house"]),
-        fill=house_value_color,
-        font=FONT_VALUE,
-    )
-
-    #                        #
-    # Center-bottom: BATTERY #
-    #                        #
-    battery_power = values["battery_power"]
-
-    if battery_power is None:
-        # Skip arrow on zero color
-        battery_text = dash_helpers.watts_abs(battery_power)
-        battery_label_color = dash_setup.IDLE_COLOR
-
-    elif battery_power < 0:
-        # Negative means charging
-        battery_text = dash_helpers.watts_abs(battery_power)
-        battery_label_color = dash_setup.WHITE
-
-        arrow_color = dash_helpers.active_color(
-            battery_power, 100, dash_setup.GREEN, dash_setup.GREY, strict=True
-        )
-
-        dash_helpers.draw_vertical_arrow(draw, 29, 67, "down", arrow_color)
-
-    elif battery_power > 0:
-        # Positive means discharging
-        battery_text = dash_helpers.watts_abs(battery_power)
-        battery_label_color = dash_setup.WHITE
-
-        arrow_color = dash_helpers.active_color(
-            battery_power, 100, dash_setup.RED, dash_setup.GREY, strict=True
-        )
-
-        dash_helpers.draw_vertical_arrow(draw, 29, 67, "up", arrow_color)
-
-    else:
-        battery_text = "0 W"
-        battery_label_color = dash_setup.WHITE
-
-    battery_value_color = dash_helpers.over_limit_color(
-        battery_power, 1000, dash_setup.RED, dash_setup.WHITE
-    )
-
-    level = values["battery_level"]
-    battery_limit = values["battery_limit"]
-
-    if level < battery_limit:
-        battery_icon_color = dash_setup.IDLE_COLOR
-    else:
-        battery_icon_color = dash_setup.WHITE
-
-    dash_helpers.draw_battery_icon(draw, 42, 67, battery_icon_color)
-
-    draw.text(
-        (64, 61),
-        battery_text,
-        fill=battery_value_color,
-        font=FONT_SMALL,
-    )
-
-    if level is not None and level >= 0:
-        battery_level_color = dash_setup.WHITE
-    else:
-        battery_level_color = dash_setup.RED
-
-    if level < battery_limit:
-        battery_level_color = dash_setup.IDLE_COLOR
-
-    # Battery percentage
-    if level is not None:
-        draw.text(
-            (64, 72),
-            f"{level:.0f}%",
-            fill=battery_level_color,
-            font=FONT_VALUE,
-        )
-
-    # Battery runtime
-    runtime_text = dash_helpers.format_runtime(values["battery_runtime"])
-    draw.text(
-        (50, 88),
-        runtime_text,
-        fill=dash_setup.IDLE_COLOR,
-        font=FONT_TINY,
-    )
-
-    # END
     lcd.display(image)
+
+
+# -----------------------------
+# Buttons
+# -----------------------------
+
+NAV_BUTTONS = ("up", "down", "left", "right", "middle")
+
+_button_state = {name: False for name in NAV_BUTTONS}
+_button_last_press = {name: 0.0 for name in NAV_BUTTONS}
+
+
+def read_button_events():
+    """Poll the joystick and return the list of buttons newly pressed
+    since the last call (debounced)."""
+    events = []
+    now = time.monotonic()
+
+    for name in NAV_BUTTONS:
+        pressed = dash_setup.read_button(name)
+        was_pressed = _button_state[name]
+
+        if pressed and not was_pressed:
+            if now - _button_last_press[name] >= dash_setup.BUTTON_DEBOUNCE_SECONDS:
+                events.append(name)
+                _button_last_press[name] = now
+
+        _button_state[name] = pressed
+
+    return events
+
+
+# -----------------------------
+# Menu + screen state machine
+# -----------------------------
+#
+# On the info screens:
+#   up/left    -> previous screen (wraps)
+#   down/right -> next screen (wraps)
+#   middle     -> open the menu
+#
+# On the menu screen:
+#   up/down       -> move selection
+#   left          -> exit menu (cancel, screen unchanged)
+#   right/middle  -> activate the selected item
+
+MENU_ITEMS = ["« Ieşire", "1: Solar", "2: Temperaturi", "3: Parametri", "4: Spring", "", "Repornire Pi", "Oprire Pi"]
+MENU_SELECTABLE_INDEXES = [0, 1, 2, 3, 4, 6, 7]
+
+
+class DashboardState:
+    """Tracks which screen (or the menu) is shown, and idles back to
+    screen 1 after dash_setup.SCREEN_IDLE_TIMEOUT_SECONDS of inactivity."""
+
+    def __init__(self):
+        self.mode = "screen"    # "screen" or "menu"
+        self.active_screen = 0  # 0-based index into dash_screens
+        self.menu_selected = 0  # index into MENU_ITEMS
+        self.last_activity = time.monotonic()
+
+    def touch(self):
+        self.last_activity = time.monotonic()
+
+    def check_idle(self):
+        idle_for = time.monotonic() - self.last_activity
+
+        if idle_for >= dash_setup.SCREEN_IDLE_TIMEOUT_SECONDS:
+            if self.mode != "screen" or self.active_screen != 0:
+                self.mode = "screen"
+                self.active_screen = 0
+                self.touch()
+
+    def handle_event(self, button):
+        self.touch()
+
+        if self.mode == "screen":
+            self._handle_screen_event(button)
+        else:
+            self._handle_menu_event(button)
+
+    def _handle_screen_event(self, button):
+        if button in ("up", "left"):
+            self.active_screen = (self.active_screen - 1) % dash_screens.SCREEN_COUNT
+        elif button in ("down", "right"):
+            self.active_screen = (self.active_screen + 1) % dash_screens.SCREEN_COUNT
+        elif button == "middle":
+            self.mode = "menu"
+            self.menu_selected = 0  # "< Exit" is always the default selection
+
+    def _handle_menu_event(self, button):
+        if button == "left":
+            self.mode = "screen"
+        elif button == "up":
+            self.menu_selected = _step_menu_selection(self.menu_selected, -1)
+        elif button == "down":
+            self.menu_selected = _step_menu_selection(self.menu_selected, 1)
+        elif button in ("right", "middle"):
+            self._confirm_menu_selection()
+
+    def _confirm_menu_selection(self):
+        selection = self.menu_selected
+
+        if selection == 0:
+            # < Exit
+            self.mode = "screen"
+        elif 1 <= selection <= 4:
+            self.mode = "screen"
+            self.active_screen = selection - 1
+        elif selection == 6:
+            restart_system()
+        elif selection == 7:
+            shutdown_system()
+
+
+def _step_menu_selection(current, direction):
+    position = MENU_SELECTABLE_INDEXES.index(current)
+    position = (position + direction) % len(MENU_SELECTABLE_INDEXES)
+    return MENU_SELECTABLE_INDEXES[position]
+
+
+def restart_system():
+    os.system("sudo reboot")
+
+
+def shutdown_system():
+    os.system("sudo shutdown now")

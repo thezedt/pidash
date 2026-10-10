@@ -52,6 +52,15 @@ SENSORS = {
 
 UPDATE_SECONDS = 5
 
+# How often the button/joystick state is polled.
+BUTTON_POLL_SECONDS = 0.05
+
+# Minimum time between accepted presses of the same button (debounce).
+BUTTON_DEBOUNCE_SECONDS = 0.15
+
+# Idle time (no button presses) before the dashboard returns to screen 1.
+SCREEN_IDLE_TIMEOUT_SECONDS = 60
+
 # -----------------------------
 # Hardware
 # -----------------------------
@@ -71,6 +80,27 @@ LCD_ROTATE = 0
 LCD_H_OFFSET = 2
 LCD_V_OFFSET = 0
 LCD_BGR = True
+
+# Waveshare 1.44-inch LCD HAT joystick + buttons
+KEY_UP_PIN = 6
+KEY_DOWN_PIN = 19
+KEY_LEFT_PIN = 5
+KEY_RIGHT_PIN = 26
+KEY_PRESS_PIN = 13
+KEY1_PIN = 21
+KEY2_PIN = 20
+KEY3_PIN = 16
+
+BUTTON_PINS = {
+    "up": KEY_UP_PIN,
+    "down": KEY_DOWN_PIN,
+    "left": KEY_LEFT_PIN,
+    "right": KEY_RIGHT_PIN,
+    "middle": KEY_PRESS_PIN,
+    "key1": KEY1_PIN,
+    "key2": KEY2_PIN,
+    "key3": KEY3_PIN,
+}
 
 # background gpio control for pwm smoothness
 pi = pigpio.pi()
@@ -97,6 +127,18 @@ def setup_backlight(brightness=90):
     pi.set_PWM_range(BACKLIGHT_PIN, 100)
     pi.set_PWM_dutycycle(BACKLIGHT_PIN, brightness)
     return pi
+
+def setup_buttons():
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
+
+    for pin in BUTTON_PINS.values():
+        GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+
+def read_button(name):
+    """Return True if the given button (see BUTTON_PINS) is currently pressed."""
+    return GPIO.input(BUTTON_PINS[name]) == GPIO.LOW
 
 def setup_lcd():
 
@@ -125,6 +167,7 @@ def setup_lcd():
 BLACK = (30, 30, 30)
 WHITE = (255, 255, 255)
 GREY = (80, 80, 80)
+LIGHT_GREY = (180, 180, 180)
 IDLE_COLOR = (120, 120, 120)
 
 SOLAR_IDLE_COLOR = IDLE_COLOR
@@ -136,3 +179,4 @@ HOUSE_COLOR = (35, 35, 35)
 
 GREEN = (75, 135, 120)
 RED = (200, 20, 20)
+BLUE = (70, 130, 220)
