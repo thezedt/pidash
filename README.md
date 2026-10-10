@@ -29,14 +29,15 @@ A dashboard for displaying sensor data on a Waveshare 1.44-inch LCD HAT (model 1
 
 ### Navigation
 - **Joystick**: Up/Down/Left/Right cycles through all 5 screens while on them; Middle Joystick opens the configuration menu (up/down cycles through the items while right joystick enters/toggles)
-- **Shortcut buttons**: Key1-Top (Temps), Key2-Middle (Params), Key3-bottom (Spring)
+- **Shortcut buttons**: Key1-Top (Temps), Key2-Middle (Params), Key3-bottom (EV)
 - **Menu combo**: Hold Key1 + Key3 to (also) open menu
 - **Idle timeout**: Returns to screen 1 after 60s inactivity
 
 ### Hardware
+- **Workhorse**: Raspberry Pi - a Zero Wireless will do fine 
 - **Display**: Waveshare 1.44" LCD (ST7735, 128x128)
 - **Backlight**: PWM-controlled (day/night brightness)
-- **Buttons**: 8 inputs (joystick + 3 keys)
+- **Buttons**: 8 inputs (4 axis joystick with middle button + 3 separate keys)
 - **Dependencies**: `luma.lcd`, `RPi.GPIO`, `pigpio`, `Pillow`
 
 ### Home Assistant Integration
@@ -56,7 +57,8 @@ A dashboard for displaying sensor data on a Waveshare 1.44-inch LCD HAT (model 1
 ## How to Use This Code
 
 > [!WARNING]
-> **Note**: This code is **seriously** hardcoded for my specific setup, sensors configuration and IDs, devices and requirements. Will require extensive configuration, adjusting and testing to fit your usage case._
+> **Note**: This code is **seriously** hardcoded for my specific setup, sensors configuration and IDs, devices and requirements. Will require extensive configuration, adjusting and testing to fit your usage case.
+> My device labels, names, menu items and messages are in Romanian, but hopefully their IDs/function names are self-explanatory. 
 
 ### Hardware Setup
 1. Enable SPI and I2C on Raspberry Pi:
