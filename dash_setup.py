@@ -6,97 +6,113 @@ from luma.core.interface.serial import spi
 from luma.lcd.device import st7735
 import pigpio
 
-# -----------------------------
-# Version info/history
-# -----------------------------
-VERSION = "v0.2.4"
-#
-# v0.2.4 - 20260919
-# * added script restart functionality in secondary menu; and "wait" screens after hard actions
-# * fixed menus redraw lag with sensors update cycle
-# * changed brightness control option to also apply at night time
-#
-# v0.2.3 - 20260916
-# * slight position and colors tweaking; changed direction arrows to triangles on energy screen
-# * added fan on icon indicator
-#
-# v0.2.2 - 20260913
-# * added 'energy' screen
-# * refactored main menu; added secondary menu with brightness and refresh controls
-# * optimized cpu usage by limiting rendering only on data changes
-#
-# v0.2.1 - 20260912
-# * added handling of network issues and HAS unavailability
-# * added spring autonomy km sensor
-# * fixed invalid colors for negative grid power
-# * fixed display/handling of negative (charging) battery time estimate
-#
-# v0.2 - 20260909
-# * beta state, all screen finalized, most functionality tested
-#
-# v0.1 - 20260904 
-# * first alpha, only home screen with most of the info
-#
+#############################################
+###
+###  needs packages: 
+###     fonts-dejavu-core 
+###     fonts-dejavu-extra
+###     pigpio python3-pigpio
+###
+###  requires pigpiod for buttons handling
+###  systemctl enable --now pigpiod
+###
+#############################################
+
+VERSION = "v0.2.5"
+"""
+--------------------------
+  Version info/history
+--------------------------
+
+v0.2.5 - 20260920
+ * added extra menu trigger on button1+button3 simultaneous press
+ * implemented network restart functionality
+ * added scroll functionality for ssid/ip field when longer than screen
+
+v0.2.4 - 20260919
+ * added script restart functionality in secondary menu; and "loading" screens after hard actions
+ * fixed menus redraw lag with sensors update cycle
+ * changed brightness control option to also apply at night time
+
+v0.2.3 - 20260916
+ * slight position and colors tweaking; changed direction arrows to triangles on energy screen
+ * added fan status icon indicator
+
+v0.2.2 - 20260913
+ * added 'energy' screen
+ * refactored main menu; added secondary menu with brightness and refresh controls
+ * optimized cpu usage by limiting rendering only on data changes
+
+v0.2.1 - 20260912
+ * added handling of network issues and HAS unavailability
+ * added spring autonomy km sensor
+ * fixed invalid colors for negative grid power
+ * fixed display/handling of negative (charging) battery time estimate
+
+v0.2 - 20260909
+ * beta state, all screen finalized, most functionality tested
+
+v0.1 - 20260904 
+ * first alpha, only home screen with most of the info
+"""
 
 # -----------------------------
 # Sensors
 # -----------------------------
 SENSORS = {
     # solar - screen 1
-    "solar": "sensor.inverter_input_power",
-    "house": "sensor.shelly_pro_em50_energy_meter_home_true_power",
-    "battery_power": "sensor.battery_1_charge_discharge_power_inverted",  # negative for charging, positive for discharging
-    "battery_level": "sensor.battery_1_state_of_capacity",
-    "battery_limit": "number.batteries_backup_power_soc",
-    "grid_power": "sensor.power_meter_active_power_inverted",  # negative for export, positive for import
-    "grid_voltage": "sensor.failsafe_grid_voltage",
-    ##"grid_status": "sensor.inverter_off_grid_status",
-    "battery_runtime": "sensor.battery_time_remaining",  # minutes !
-    "inverter_temp": "sensor.inverter_internal_temperature",
-    "battery_bms_temp": "sensor.battery_1_temperature",
-    "battery_avg_temp": "sensor.battery_1_average_temperature",
-    "inverter_fans_1": "switch.sonoff_10021e6428_1",
-    "inverter_fans_2": "switch.sonoff_10021e6428_2",
+    "solar": "sensor.inverter_input_power",                               # solar input power, W
+    "house": "sensor.shelly_pro_em50_energy_meter_home_true_power",       # house power use, W
+    "battery_power": "sensor.battery_1_charge_discharge_power_inverted",  # battery power flow, W, negative for charging, positive for discharging
+    "battery_level": "sensor.battery_1_state_of_capacity",                # battery SoC level, %
+    "grid_power": "sensor.power_meter_active_power_inverted",             # grid power flow, W, negative for export, positive for import
+    "grid_voltage": "sensor.failsafe_grid_voltage",                       # grid voltage, V
+    "battery_runtime": "sensor.battery_time_remaining",                   # battery runtime, helper sensor, value in minutes ! 
+    "inverter_temp": "sensor.inverter_internal_temperature",              # inverter internal temperature, C
+    "battery_bms_temp": "sensor.battery_1_temperature",                   # battery bms temperature, C
+    "battery_avg_temp": "sensor.battery_1_average_temperature",           # battery average temperature, helper sensor, C
+    "inverter_fans_1": "switch.sonoff_10021e6428_1",                      # inverter custom cooling, fans set 1, binary state on/off
+    "inverter_fans_2": "switch.sonoff_10021e6428_2",                      # inverter custom cooling, fans set 2, binary state on/off
     # details & temps - screen 2
-    "battery_pack1_avg_temp": "sensor.battery_1_pack_1_average_temperature",
-    "battery_pack2_avg_temp": "sensor.battery_1_pack_2_average_temperature",
-    "outside_temp": "sensor.ewelink_snzb_02p_temperature",
-    "outside_hum": "sensor.ewelink_snzb_02p_humidity",
-    "outside2_temp": "sensor.sonoff_snzb_02p_3_temperature",
-    "outside2_hum": "sensor.sonoff_snzb_02p_3_humidity",
-    "hallway_temp": "sensor.hallway_temp_hum_3_temperature",
-    "hallway_hum": "sensor.hallway_temp_hum_3_humidity",
-    "pantry_temp": "sensor.sonoff_snzb_02p_4_temperature",
-    "pantry_hum": "sensor.sonoff_snzb_02p_4_humidity",
-    "attic_temp": "sensor.ts0201_h_t_z_1_temperature",
-    "bicaz_temp": "sensor.bicaz_temp_hum_iv_temperature",
+    "battery_pack1_avg_temp": "sensor.battery_1_pack_1_average_temperature",  # battery pack 1 average temperature, helper sensor, C
+    "battery_pack2_avg_temp": "sensor.battery_1_pack_2_average_temperature",  # battery pack 2 average temperature, helper sensor, C
+    "outside_temp": "sensor.ewelink_snzb_02p_temperature",                # outside temperature sensor, C
+    "outside_hum": "sensor.ewelink_snzb_02p_humidity",                    # outside humidity sensor, %
+    "outside2_temp": "sensor.sonoff_snzb_02p_3_temperature",              # alternative outside temperature sensors, C
+    "outside2_hum": "sensor.sonoff_snzb_02p_3_humidity",                  # alternative outside humidity sensors, %
+    "hallway_temp": "sensor.hallway_temp_hum_3_temperature",              # hallway temperature sensor, C
+    "hallway_hum": "sensor.hallway_temp_hum_3_humidity",                  # hallway humidity sensor, %
+    "pantry_temp": "sensor.sonoff_snzb_02p_4_temperature",                # pantry temperature sensor, C
+    "pantry_hum": "sensor.sonoff_snzb_02p_4_humidity",                    # pantry humidity sensor, %
+    "attic_temp": "sensor.ts0201_h_t_z_1_temperature",                    # attic temperature sensor, C
+    "bicaz_temp": "sensor.bicaz_temp_hum_iv_temperature",                 # additional temperature sensor, C
     # extras - screen 3
-    "inverter_derating": "number.inverter_power_derating",
-    "inverter_grid_status": "sensor.inverter_off_grid_status", # ["On-Grid", "Off-Grid"]
-    "battery_backup_level": "number.batteries_backup_power_soc",
-    "battery_charge_power": "number.batteries_maximum_charging_power",
-    "battery_discharge_power": "number.batteries_maximum_discharging_power",
+    "inverter_derating": "number.inverter_power_derating",                # inverter power deranting value, W, defaults to 5500
+    "inverter_grid_status": "sensor.inverter_off_grid_status",            # inverter grid-connection status, string: ["On-Grid", "Off-Grid"]
+    "battery_backup_level": "number.batteries_backup_power_soc",          # battery conservation limit, %
+    "battery_charge_power": "number.batteries_maximum_charging_power",        # battery charnging power, W, default 5000
+    "battery_discharge_power": "number.batteries_maximum_discharging_power",  # battery discharging power, W, default 5000
     # spring - screen 4
-    "spring_battery_level": "sensor.battery",
-    "spring_charge_status": "binary_sensor.charging", # binary: ["on", "off]
-    "spring_charge_power": "sensor.feyree_ev_charger_power_in_watts",
-    "spring_charge_current": "number.feyree_ev_charger_set_charge_current",
-    "spring_time_to_limit": "sensor.spring_time_remaining_2", # string !
-    "spring_kwh_to_limit": "sensor.spring_charge_capacity_remaining",
-    "spring_autonomy": "sensor.battery_autonomy",
-    "solar_estimate_today_r": "sensor.energy_production_today_remaining",
-    "solar_estimate_tomorrow": "sensor.energy_production_tomorrow",
-    "spring_temp": "sensor.shelly_blu_h_t_ble_temperature",
+    "spring_battery_level": "sensor.battery",                             # ev battery level sensor, %
+    "spring_charge_status": "binary_sensor.charging",                     # ev charging status, binary: ["on", "off"]
+    "spring_charge_power": "sensor.feyree_ev_charger_power_in_watts",     # ev charging station power, W 
+    "spring_charge_current": "number.feyree_ev_charger_set_charge_current",   # ev charging station current, A
+    "spring_time_to_limit": "sensor.spring_time_remaining_2",             # ev charging time remaining, helper sensor, string ! "__h __m"
+    "spring_kwh_to_limit": "sensor.spring_charge_capacity_remaining",     # ev charging kwh remaining, helper sensor, kWh
+    "spring_autonomy": "sensor.battery_autonomy",                         # ev autonomy remaining, km
+    "solar_estimate_today_r": "sensor.energy_production_today_remaining", # solar estimate for today, kWh
+    "solar_estimate_tomorrow": "sensor.energy_production_tomorrow",       # solar estimate for tomorrow, kWh
+    "spring_temp": "sensor.shelly_blu_h_t_ble_temperature",               # ev temperature sensor, C
     # energy - screen 5
-    "energy_solar_kwh": "sensor.meter_solar_energy_daily", #"sensor.inverter_total_dc_input_energy",
-    "energy_grid_import_kwh": "sensor.meter_grid_energy_daily_import", #"sensor.power_meter_consumption",
-    "energy_grid_export_kwh": "sensor.meter_grid_energy_daily_export", #"sensor.power_meter_exported",
-    "energy_house_kwh": "sensor.meter_house_energy_daily", #"sensor.shelly_pro_em50_energy_meter_home_total_active_energy",
-    "energy_battery_discharge_kwh": "sensor.batteries_day_discharge",
-    "energy_battery_charge_kwh": "sensor.batteries_day_charge",
+    "energy_solar_kwh": "sensor.meter_solar_energy_daily",                # solar daily cumulative energy, helper sensor, kWh - derived from "sensor.inverter_total_dc_input_energy"
+    "energy_grid_import_kwh": "sensor.meter_grid_energy_daily_import",    # grid daily cumulative import energy, helper sensor, kWh, derived from "sensor.power_meter_consumption",
+    "energy_grid_export_kwh": "sensor.meter_grid_energy_daily_export",    # grid daily cumulative export energy, helper sensor, kWh, derived from "sensor.power_meter_exported",
+    "energy_house_kwh": "sensor.meter_house_energy_daily",                # house daily cumulative energy use, helper sensor, kWh, derived from "sensor.shelly_pro_em50_energy_meter_home_total_active_energy",
+    "energy_battery_discharge_kwh": "sensor.batteries_day_discharge",     # battery daily cumulative discharge energy, kWh
+    "energy_battery_charge_kwh": "sensor.batteries_day_charge",           # battery daily cumulative charge energy, kWh
 }
 
-UPDATE_SECONDS = 10
+UPDATE_SECONDS = 10     # main control for how often to refresh data from homeassistant
 
 # How often the button/joystick state is polled.
 BUTTON_POLL_SECONDS = 0.05

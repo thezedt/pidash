@@ -239,9 +239,9 @@ def draw_solar_screen(draw, values, font_tiny, font_small, font_value):
     )
 
     level = values["battery_level"]
-    battery_limit = values["battery_limit"]
+    battery_backup_level = values["battery_backup_level"]
 
-    if level < battery_limit or (battery_power is not None and abs(battery_power) < 30):
+    if level < battery_backup_level or (battery_power is not None and abs(battery_power) < 30):
         battery_icon_color = dash_setup.IDLE_COLOR
     else:
         battery_icon_color = dash_setup.WHITE
@@ -262,7 +262,7 @@ def draw_solar_screen(draw, values, font_tiny, font_small, font_value):
     else:
         battery_level_color = dash_setup.RED
 
-    if level < battery_limit:
+    if level < battery_backup_level:
         battery_level_color = dash_setup.IDLE_COLOR
 
     # Battery percentage

@@ -1,13 +1,6 @@
 #!/usr/bin/env python3
 """Fonts, the Home Assistant client, and dashboard/error rendering."""
 
-### needs packages: 
-###     fonts-dejavu-core 
-###     fonts-dejavu-extra
-###     pigpio python3-pigpio
-###
-### systemctl enable --now pigpiod
-
 from PIL import Image, ImageDraw, ImageFont
 import requests
 import os
@@ -314,6 +307,28 @@ def request_values_refresh():
 # Display
 # -----------------------------
 
+_current_lcd = None
+# Cached backlight PWM handle (set once from dashboard.main()) so brightness
+# changes made from the Advanced submenu take effect immediately, instead
+# of waiting for the next periodic sensor-poll cycle.
+_backlight_pwm = None
+
+
+def set_backlight_pwm(pwm):
+    global _backlight_pwm
+    _backlight_pwm = pwm
+
+
+def compute_brightness():
+    # lower brightness between 23:30 and 07:30
+    now = time.localtime()
+    minutes = now.tm_hour * 60 + now.tm_min
+
+    # Quiet period: 23:30 through 07:30
+    if minutes >= 22 * 60 + 30 or minutes < 7 * 60 + 30:
+        return dash_setup.NIGHT_BRIGHTNESS
+    return dash_setup.DAY_BRIGHTNESS
+
 
 def draw_error_(lcd, error):
     image = Image.new("RGB", (128, 128), "black")
@@ -368,12 +383,12 @@ def draw_error(lcd, error):
 
 
 def render(lcd, state, values, layout=dash_setup.SCREEN_LAYOUT):
-    if not is_ha_reachable():
-        draw_homeassistant_error(lcd)
-        return
-
     global _current_lcd
     _current_lcd = lcd
+
+    if not is_ha_reachable() and state.mode == "screen":
+        draw_homeassistant_error(lcd)
+        return
 
     if is_fetching():
         background = "black"
@@ -420,10 +435,15 @@ NAV_BUTTONS = ("up", "down", "left", "right", "middle", "key1", "key2", "key3")
 _button_state = {name: False for name in NAV_BUTTONS}
 _button_last_press = {name: 0.0 for name in NAV_BUTTONS}
 
+_combo_active = False
 
 def read_button_events():
     """Poll the joystick and return the list of buttons newly pressed
-    since the last call (debounced)."""
+    since the last call (debounced). Also emits a synthetic "menu_combo"
+    event if key1 and key3 are held down at the same time, as an
+    alternative to the middle button for opening the menu."""
+    global _combo_active
+
     events = []
     now = time.monotonic()
 
@@ -437,6 +457,13 @@ def read_button_events():
                 _button_last_press[name] = now
 
         _button_state[name] = pressed
+
+    if _button_state["key1"] and _button_state["key3"]:
+        if not _combo_active:
+            events.append("menu_combo")
+            _combo_active = True
+    else:
+        _combo_active = False
 
     return events
 
@@ -491,7 +518,7 @@ def build_submenu_items():
     interval, and the test-mode clock/uptime label)."""
     return [
         "« Înapoi",
-        get_network_restart_label("Repornire reţea"),
+        dash_helpers.scrolling_text(get_network_restart_label("Repornire reţea")),
         f"Luminozitate: {dash_setup.DAY_BRIGHTNESS}%",
         f"Interval: {dash_setup.UPDATE_SECONDS}s",
         "Repornire PiDash",
@@ -541,7 +568,11 @@ class DashboardState:
     def handle_event(self, button):
         self.touch()
 
-        if button in KEY_SCREEN_MAP:
+        if button == "menu_combo":
+            if self.mode == "screen":
+                self.mode = "menu"
+                self.menu_selected = 0
+        elif button in KEY_SCREEN_MAP:
             self._handle_key_shortcut(button)
         elif self.mode == "screen":
             self._handle_screen_event(button)
@@ -615,6 +646,9 @@ class DashboardState:
         new_value = max(10, min(100, dash_setup.DAY_BRIGHTNESS + step))
         dash_setup.DAY_BRIGHTNESS = new_value
         dash_setup.NIGHT_BRIGHTNESS = new_value
+
+        if _backlight_pwm is not None:
+            _backlight_pwm.set_PWM_dutycycle(dash_setup.BACKLIGHT_PIN, compute_brightness())
 
     def _adjust_refresh(self, button):
         step = 1 if button == "right" else -1
@@ -802,19 +836,19 @@ NETWORK_RESTART_CHECK_INTERVAL = 3  # seconds between reachability re-checks
 _network_restart_pending = False
 _network_restart_label = None
 _network_restart_next_check = 0.0
-_current_lcd = None
 
 
 def restart_network():
     """Kick off a network restart. No-op for now - see note above."""
     global _network_restart_pending, _network_restart_label, _network_restart_next_check
 
-    # TODO: actually restart networking once we know the target stack.
-    # os.system("sudo systemctl restart NetworkManager")
 
     _network_restart_pending = True
     _network_restart_label = "Repornire reţea..."
     _network_restart_next_check = time.monotonic() + NETWORK_RESTART_CHECK_INTERVAL
+
+    #os.system("sudo ifconfig wlan0 down && sudo ifconfig wlan0 up")
+    os.system("sudo systemctl restart NetworkManager")
 
 
 def poll_network_restart_status():

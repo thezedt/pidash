@@ -2,6 +2,7 @@
 """Color-selection helpers, text formatting, and icon/arrow drawing primitives."""
 
 import math
+import time
 import dash_setup, dash_functions
 
 # -----------------------------
@@ -130,6 +131,34 @@ def format_runtime(minutes):
 
     return f"{sign}{hours}h {remaining_minutes:02d}m"
 
+def truncate_middle(text, max_length=10, ellipsis="\u2026"):
+    """Truncate `text` to at most `max_length` characters by cutting out
+    the middle and replacing it with a single ellipsis character (not
+    the usual end-truncation), e.g. "MyLongWifiName" -> "MyLo\u2026iName"."""
+    if text is None or len(text) <= max_length:
+        return text
+
+    remaining = max_length - 1  # 1 char reserved for the ellipsis
+    start_len = (remaining + 1) // 2
+    end_len = remaining - start_len
+
+    end_part = text[-end_len:] if end_len > 0 else ""
+    return text[:start_len] + ellipsis + end_part
+
+def scrolling_text(text, max_chars=19, speed_chars_per_sec=2, gap=" \u2022 "):
+    """Return a max_chars-wide window into `text` that steps sideways
+    (looping) once per ~1/speed_chars_per_sec seconds, if `text` is
+    longer than max_chars; otherwise `text` is returned unchanged. Plain
+    string in, plain string out - draw it with draw.text() like normal.
+    Not pixel-smooth (it jumps a full character at a time), but needs no
+    image access and stays simple."""
+    if text is None or len(text) <= max_chars:
+        return text
+
+    loop_text = text + gap
+    offset = int(time.monotonic() * speed_chars_per_sec) % len(loop_text)
+
+    return (loop_text + loop_text)[offset:offset + max_chars]
 
 def text_center(draw, xy, text, fill, font):
     width = draw.textbbox((0, 0), text, font=font)[2]
@@ -343,7 +372,7 @@ def draw_solar_icon(draw, x, y, color):
     rounded_ray(x + 2, y + 16, x + 5, y + 13)           # lower-left
     rounded_ray(x + 13, y + 13, x + 16, y + 16)         # lower-right
 
-def draw_fan_icon_(draw, x, y, color):
+def draw_fan_icon_nuclear(draw, x, y, color):
     # Icon dimensions: approximately 20x20 pixels, same footprint as
     # draw_solar_icon. 3 curved blades (pie slices) around a small dark
     # hub, so they read as a fan/propeller rather than a solid triangle.

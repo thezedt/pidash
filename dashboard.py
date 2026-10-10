@@ -9,19 +9,9 @@ import dash_functions
 import traceback
 
 
-def compute_brightness():
-    # lower brightness between 23:30 and 07:30
-    now = time.localtime()
-    minutes = now.tm_hour * 60 + now.tm_min
-
-    # Quiet period: 23:30 through 07:30
-    if minutes >= 22 * 60 + 30 or minutes < 7 * 60 + 30:
-        return dash_setup.NIGHT_BRIGHTNESS
-    return dash_setup.DAY_BRIGHTNESS
-
-
 def main():
     backlight_pwm = dash_setup.setup_backlight()
+    dash_functions.set_backlight_pwm(backlight_pwm)
     lcd = dash_setup.setup_lcd()
 
     try:
@@ -50,7 +40,7 @@ def main():
                 now = time.monotonic()
                 if now - last_sensor_poll >= dash_setup.UPDATE_SECONDS:
                     backlight_pwm.set_PWM_dutycycle(
-                        dash_setup.BACKLIGHT_PIN, compute_brightness()
+                        dash_setup.BACKLIGHT_PIN, dash_functions.compute_brightness()
                     )
                     dash_functions.request_values_refresh()
                     last_sensor_poll = now
