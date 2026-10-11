@@ -18,11 +18,15 @@ import pigpio
 ###
 #############################################
 
-VERSION = "v0.2.5"
+VERSION = "v0.2.6"
 """
 --------------------------
   Version info/history
 --------------------------
+
+v0.2.6 - 20261011
+ * added screen rotation option and handling of changing joystick/buttons logic
+ * added handling of longer content in the advanced menu and re-arranged its items
 
 v0.2.5 - 20260920
  * added extra menu trigger on button1+button3 simultaneous press
@@ -150,6 +154,8 @@ LCD_SPI_DEVICE = 0
 LCD_GPIO_DC = 25
 LCD_GPIO_RST = 27
 LCD_ROTATE = 0
+# Screen rotation: 0 (normal) or 180 (upside-down)
+SCREEN_ROTATION = 0
 LCD_H_OFFSET = 2
 LCD_V_OFFSET = 0
 LCD_BGR = True

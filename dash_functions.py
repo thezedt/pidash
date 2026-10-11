@@ -308,11 +308,21 @@ def request_values_refresh():
 # -----------------------------
 
 _current_lcd = None
+_current_rotation = dash_setup.SCREEN_ROTATION
 # Cached backlight PWM handle (set once from dashboard.main()) so brightness
 # changes made from the Advanced submenu take effect immediately, instead
 # of waiting for the next periodic sensor-poll cycle.
 _backlight_pwm = None
 
+def get_current_rotation():
+    return _current_rotation
+
+def set_current_rotation(value):
+    global _current_rotation
+    _current_rotation = value
+
+def get_current_lcd():
+    return _current_lcd
 
 def set_backlight_pwm(pwm):
     global _backlight_pwm
@@ -412,7 +422,9 @@ def render(lcd, state, values, layout=dash_setup.SCREEN_LAYOUT):
         dash_helpers.draw_vertical_menu(draw, MENU_ITEMS, state.menu_selected, FONT_SMALL)
     elif state.mode == "submenu":
         poll_network_restart_status()
-        dash_helpers.draw_vertical_menu(draw, build_submenu_items(), state.menu_selected, FONT_SMALL)
+#        dash_helpers.draw_vertical_menu(draw, build_submenu_items(), state.menu_selected, FONT_SMALL)
+        submenu_items = build_submenu_items()
+        dash_helpers.draw_vertical_menu_scrollable(draw, submenu_items, state.menu_selected, state.submenu_scroll, FONT_SMALL)
     else:
         dash_screens.draw_screen(
             draw, state.active_screen, values, FONT_TINY, FONT_SMALL, FONT_VALUE, FONT_CONDENSED, layout
@@ -422,6 +434,10 @@ def render(lcd, state, values, layout=dash_setup.SCREEN_LAYOUT):
         )
     if is_fetching():
         dash_helpers.draw_wireless_icon(draw, 3, 116, 9, dash_setup.IDLE_COLOR)
+
+    # Apply rotation
+    if state.screen_rotation == 180:
+        image = image.rotate(180, expand=False)
 
     lcd.display(image)
 
@@ -509,22 +525,27 @@ MENU_SELECTABLE_INDEXES = [0, 1, 2, 3, 4, 5, 7]
 # On items 2 (brightness) and 3 (refresh), left/right adjust the value
 # in place instead of moving the selection - see
 # DashboardState._handle_submenu_event.
-SUBMENU_SELECTABLE_INDEXES = [0, 1, 2, 3, 4, 5, 6, 7]
+SUBMENU_SELECTABLE_INDEXES = [0, 2, 3, 4, 5, 6, 8, 9, 11]
 
 
 def build_submenu_items():
     """Build the Advanced submenu labels fresh each render, since three of
     them show live state (network-restart status, brightness, refresh
     interval, and the test-mode clock/uptime label)."""
+    rotation_label = "180°" if get_current_rotation() == 180 else "0°"
     return [
         "« Înapoi",
+        "",  # Separator
         dash_helpers.scrolling_text(get_network_restart_label("Repornire reţea")),
         f"Luminozitate: {dash_setup.DAY_BRIGHTNESS}%",
         f"Interval: {dash_setup.UPDATE_SECONDS}s",
+        f"Rotație ecran: {rotation_label}",
         "Repornire PiDash",
-        hidden_menu_label(),
+        "",  # Separator
         "* Repornire Pi",
         "* Oprire Pi",
+        "",  # Separator
+        hidden_menu_label(),
     ]
 
 # KEY1/2/3 are separate physical buttons from the joystick. Each jumps
@@ -545,6 +566,8 @@ class DashboardState:
     def __init__(self):
         self.mode = "screen"             # "screen", "menu", "submenu", or "confirm"
         self.active_screen = 0           # 0-based index into dash_screens
+        self.screen_rotation = dash_setup.SCREEN_ROTATION
+        self.submenu_scroll = 0          # Scroll offset for submenu
         self.menu_selected = 0           # index into MENU_ITEMS or the submenu items
         self.pending_action = None       # handle confirmation screen
         self.pending_action_label = ""   # single screen for multiple questions
@@ -568,6 +591,17 @@ class DashboardState:
     def handle_event(self, button):
         self.touch()
 
+        # Swap joystick directions when screen is rotated 180 degrees
+        if self.screen_rotation == 180:
+            if button == "up":
+                button = "down"
+            elif button == "down":
+                button = "up"
+            elif button == "left":
+                button = "right"
+            elif button == "right":
+                button = "left"
+
         if button == "menu_combo":
             if self.mode == "screen":
                 self.mode = "menu"
@@ -585,6 +619,13 @@ class DashboardState:
 
     def _handle_key_shortcut(self, button):
         target = KEY_SCREEN_MAP[button]
+
+        # When rotated 180, swap KEY1 and KEY3 targets
+        if self.screen_rotation == 180:
+            if button == "key1":
+                target = KEY_SCREEN_MAP["key3"]
+            elif button == "key3":
+                target = KEY_SCREEN_MAP["key1"]
 
         if self.mode == "screen" and self.active_screen == target:
             self.active_screen = 0
@@ -628,18 +669,40 @@ class DashboardState:
     def _handle_submenu_event(self, button):
         # Items 2 (brightness) and 3 (refresh) use left/right to adjust
         # their value in place instead of the usual back/confirm meaning.
-        if self.menu_selected == 2 and button in ("left", "right"):
+        submenu_items = build_submenu_items()
+        visible_items = 8  # Number of items that fit on screen
+        max_scroll = max(0, len(submenu_items) - visible_items)
+
+        if self.menu_selected == 3 and button in ("left", "right"):
             self._adjust_brightness(button)
-        elif self.menu_selected == 3 and button in ("left", "right"):
+        elif self.menu_selected == 4 and button in ("left", "right"):
             self._adjust_refresh(button)
+        elif self.menu_selected == 5 and button in ("left", "right"):
+            self._toggle_rotation()
         elif button == "left":
             self._leave_submenu()
         elif button == "up":
+            prev_selected = self.menu_selected
             self.menu_selected = _step_submenu_selection(self.menu_selected, -1)
+            # Handle wrap-around from 0 to last
+            if prev_selected == 0 and self.menu_selected == SUBMENU_SELECTABLE_INDEXES[-1]:
+                self.submenu_scroll = max_scroll
+            elif self.menu_selected < self.submenu_scroll:
+                self.submenu_scroll = self.menu_selected
         elif button == "down":
+            prev_selected = self.menu_selected
             self.menu_selected = _step_submenu_selection(self.menu_selected, 1)
+            # Handle wrap-around from last to 0
+            if prev_selected == SUBMENU_SELECTABLE_INDEXES[-1] and self.menu_selected == 0:
+                self.submenu_scroll = 0
+            elif self.menu_selected >= self.submenu_scroll + visible_items:
+                self.submenu_scroll = min(self.menu_selected - visible_items + 1, max_scroll)
         elif button in ("right", "middle"):
             self._confirm_submenu_selection()
+
+    def _toggle_rotation(self):
+        self.screen_rotation = 180 if self.screen_rotation == 0 else 0
+        set_current_rotation(self.screen_rotation)
 
     def _adjust_brightness(self, button):
         step = 10 if button == "right" else -10
@@ -665,23 +728,25 @@ class DashboardState:
         if selection == 0:
             # « Înapoi
             self._leave_submenu()
-        elif selection == 1:
+        elif selection == 2:
             restart_network()
-        elif selection == 4:
-            restart_script()
         elif selection == 5:
-            dash_setup.TEST_MODE = not dash_setup.TEST_MODE
-            #MENU_ITEMS[5] = hidden_menu_label()
+            self._toggle_rotation()
         elif selection == 6:
+            restart_script()
+        elif selection == 8:
           self.pending_action = restart_system
           self.pending_action_label = "Repornire Pi"
           self.confirm_return_mode = "submenu"
           self.mode = "confirm"
-        elif selection == 7:
+        elif selection == 9:
           self.pending_action = shutdown_system
           self.pending_action_label = "Oprire Pi"
           self.confirm_return_mode = "submenu"
           self.mode = "confirm"
+        elif selection == 11:
+            dash_setup.TEST_MODE = not dash_setup.TEST_MODE
+            #MENU_ITEMS[5] = hidden_menu_label()
 
     def _handle_confirmation_event(self, button):
         if button in ("middle", "right"):

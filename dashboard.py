@@ -23,6 +23,7 @@ def main():
 
         dash_setup.setup_buttons()
         state = dash_functions.DashboardState()
+        dash_functions.set_current_rotation(dash_setup.SCREEN_ROTATION)
         last_sensor_poll = 0.0
         last_signature = None
 

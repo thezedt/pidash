@@ -1,7 +1,7 @@
 # PiDash
 **Pi Dash(board) for HomeAssistant**
 
-A dashboard for displaying sensor data on a Waveshare 1.44-inch LCD HAT (model 13891).
+A dashboard for displaying sensor data on a [Waveshare 1.44-inch LCD HAT (model 13891)](https://www.waveshare.com/1.44inch-lcd-hat.htm).
 
 ![Dashboard Solar Screen](/assets/dashboard.jpg)
 
@@ -48,12 +48,19 @@ A dashboard for displaying sensor data on a Waveshare 1.44-inch LCD HAT (model 1
 - Reads **40+ sensors** in a single API call (`/api/states`)
 - Background threading for non-blocking updates
 - Handles network errors (shows broken Wi-Fi icon and semi-diagnostic error messages)
-- Test mode with random data (toggle via hidden menu)
+
+### Advanced Features
+- Options to adjust brightness, data refresh interval, screen rotation
+- Ability to self-restart the script, restart networking (in case if crashes), restart and shutdown the host Pi
+- Test mode with random data for features display testing (toggle-able via hidden menu)
 
 ### Visual Feedback
-- Color-coded values (red/green/blue for thresholds)
+- Color-coded values (red/green/blue for configurable thresholds)
 - Icons for solar, grid, house, battery, fans, thermometer
+- Over-temperature, over-voltage alert indicators
+- Inverter addon fan status indicator
 - Inverter off-grid alert (red background)
+- Network information display on restart
 - Loading spinner during actions (restart, shutdown)
 
 ---
@@ -61,8 +68,7 @@ A dashboard for displaying sensor data on a Waveshare 1.44-inch LCD HAT (model 1
 ## How to Use
 
 > [!WARNING]
-> **Note**: This code is **seriously** hardcoded for my specific setup, sensors configuration and IDs, devices and requirements. Will require extensive configuration, adjusting and testing to fit your usage case.
-> My device labels, names, menu items and messages are in Romanian, but hopefully their IDs/function names are self-explanatory. 
+> **Note**: This code is **seriously** hardcoded for my specific setup, sensors configuration and IDs, devices and requirements. Will require extensive configuration, adjusting and testing to fit your usage case. This script should only be taken as an example on how things can be done and a starting point, not a ready-to-use piece of software. 
 
 ### Hardware Setup
 1. Enable SPI and I2C on Raspberry Pi:
@@ -89,6 +95,15 @@ Also define your local network CIDR for correctly identifying connected state (i
 ```bash
 REQUIRED_NETWORK = ipaddress.ip_network("192.168.1.0/24")
 ```
+
+
+### Sensors
+The sensor IDs are defined in the `dash_setup.py` file. The energy and solar screens (5 and 1) require all sensors to exist to have the required amount of data for display. The other screens (2, 3 and 4) will auto-adjust to fit the list of sensors defined.
+
+Additional ID-specific parameters are set (for now) in `dash_functions.py` (random value initialization in test mode) and directly in `dash_screens.py` for applying the min/max/preset values that trigger alternative colors.   Temperature sensors accept a _warning_ value that will color them red. The lower limit warning value is hardcoded to 10°C.  
+Most other sensors accept an "over" value that triggers their warning color (also red).  
+
+All device labels, names, menu items and messages displayed on the screen are in Romanian, but hopefully their IDs/function names in the code are self-explanatory.
 
 
 ### Test the Dashboard

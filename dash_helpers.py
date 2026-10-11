@@ -253,6 +253,41 @@ def draw_vertical_menu(draw, items, selected_index, font):
 
     draw.text( (x, y), text, fill=dash_setup.GREY, font=dash_functions.FONT_TINY )
 
+def draw_vertical_menu_scrollable(draw, items, selected_index, scroll_offset, font):
+    """Draw a scrollable vertical menu with visible window."""
+    row_height = 15
+    top = 2
+    visible_items = 8  # Number of items that fit on screen
+
+    # Draw visible items
+    for index in range(scroll_offset, min(scroll_offset + visible_items, len(items))):
+        y = top + (index - scroll_offset) * row_height
+
+        if index == selected_index:
+            draw.rectangle((0, y, 127, y + row_height - 1), fill=dash_setup.GREY)
+
+        if items[index]:
+            draw.text((8, y + 2), items[index], fill=dash_setup.WHITE, font=font)
+
+    # Draw scroll indicator if more items exist
+    if len(items) > visible_items:
+        # Up arrow at top if can scroll up
+        if scroll_offset > 0:
+            draw_scroll_arrow(draw, 120, 6, "up", dash_setup.IDLE_COLOR, width=10)
+        # Down arrow at bottom if can scroll down
+        if scroll_offset + visible_items < len(items):
+            draw_scroll_arrow(draw, 120, 112, "down", dash_setup.IDLE_COLOR, width=10)
+
+    # version info at top-right corner
+    text = dash_setup.VERSION
+    bbox = draw.textbbox((0, 0), text, font=dash_functions.FONT_TINY)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+    margin = 2
+    x = dash_setup.LCD_WIDTH - margin - text_width - 3
+    y = dash_setup.LCD_HEIGHT - margin - text_height - 2
+    draw.text((x, y), text, fill=dash_setup.GREY, font=dash_functions.FONT_TINY)
+
 def draw_confirmation_screen(draw, action_label, font):
     text = f"{action_label}?"
 
@@ -588,6 +623,23 @@ def draw_horizontal_arrow(draw, x, y, direction, color):
             ],
             fill=color,
         )
+
+
+def draw_scroll_arrow(draw, x, y, direction, color, width=12, height=8):
+    """Draw a wider scroll arrow (like Windows scrollbar buttons)."""
+    if direction == "up":
+        points = [
+            (x, y),                    # top center
+            (x + width // 2, y + height),  # bottom right
+            (x - width // 2, y + height)   # bottom left
+        ]
+    else:  # down
+        points = [
+            (x, y + height),           # bottom center
+            (x + width // 2, y),       # top right
+            (x - width // 2, y)        # top left
+        ]
+    draw.polygon(points, fill=color)
 
 
 # -----------------------------
