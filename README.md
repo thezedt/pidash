@@ -133,6 +133,11 @@ Then:
 sudo systemctl enable --now dashboard.service
 ```
 
+
+### Changelog
+
+See [`dash_setup.py`](https://github.com/thezedt/pidash/blob/main/dash_setup.py#L24)
+
 ---
 
 ![Dashboard Temps Screen](/assets/dashboard-2.jpg)
