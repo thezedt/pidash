@@ -353,6 +353,9 @@ def draw_error_(lcd, error):
     draw.text((5, 70), message[42:64], fill="white", font=FONT_TINY)
     draw.text((5, 85), message[64:86], fill="white", font=FONT_TINY)
 
+    # Apply rotation
+    if get_current_rotation() == 180:
+        image = image.rotate(180, expand=False)
     lcd.display(image)
 
 def draw_error(lcd, error):
@@ -389,6 +392,9 @@ def draw_error(lcd, error):
         y = text_y + index * line_height
         draw.text( (text_x, y), line, fill="white", font=FONT_TINY )
 
+    # Apply rotation
+    if get_current_rotation() == 180:
+        image = image.rotate(180, expand=False)
     lcd.display(image)
 
 
@@ -438,7 +444,6 @@ def render(lcd, state, values, layout=dash_setup.SCREEN_LAYOUT):
     # Apply rotation
     if state.screen_rotation == 180:
         image = image.rotate(180, expand=False)
-
     lcd.display(image)
 
 
@@ -1055,6 +1060,9 @@ def draw_connection_error(lcd, title, line_one, line_two):
         anchor="mm",
     )
 
+    # Apply rotation
+    if get_current_rotation() == 180:
+        image = image.rotate(180, expand=False)
     lcd.display(image)
 
 def draw_network_error(lcd):

@@ -18,11 +18,14 @@ import pigpio
 ###
 #############################################
 
-VERSION = "v0.2.6"
+VERSION = "v0.2.6.1"
 """
 --------------------------
   Version info/history
 --------------------------
+
+v0.2.6.1 - 20261011
+ * fixed screen rotation not applying to error messages
 
 v0.2.6 - 20261011
  * added screen rotation option and handling of changing joystick/buttons logic
