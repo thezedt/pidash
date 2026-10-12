@@ -289,7 +289,7 @@ def draw_vertical_menu_scrollable(draw, items, selected_index, scroll_offset, fo
     draw.text((x, y), text, fill=dash_setup.GREY, font=dash_functions.FONT_TINY)
 
 def draw_confirmation_screen(draw, action_label, font):
-    text = f"{action_label}?"
+    text = get_text("label_confirm").format(action_label)
 
     bbox = draw.textbbox((0, 0), text, font=font)
     text_width = bbox[2] - bbox[0]

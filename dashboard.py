@@ -5,6 +5,7 @@ import time
 
 import dash_setup
 import dash_functions
+import dash_translation
 
 import traceback
 
@@ -13,6 +14,7 @@ def main():
     backlight_pwm = dash_setup.setup_backlight()
     dash_functions.set_backlight_pwm(backlight_pwm)
     lcd = dash_setup.setup_lcd()
+    dash_translation.CURRENT_LANGUAGE = dash_setup.DEFAULT_LANGUAGE
 
     try:
         # Do not initialize buttons or contact Home Assistant until the
@@ -33,6 +35,11 @@ def main():
         dash_functions.set_latest_values(dash_functions.read_values())
         while True:
             try:
+                # Force redraw if language changed
+                if hasattr(state, '_language_changed') and state._language_changed:
+                    last_signature = None
+                    state._language_changed = False
+
                 for button in dash_functions.read_button_events():
                     state.handle_event(button)
 

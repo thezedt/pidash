@@ -7,7 +7,7 @@ import os
 import threading
 import time
 import textwrap
-import random # for debug tests
+import random # for TEST mode
 from datetime import datetime
 import ipaddress
 import socket
@@ -17,6 +17,9 @@ import dash_config
 import dash_setup
 import dash_helpers
 import dash_screens
+from dash_translation import get_text, set_language
+import dash_translation
+from dash_setup import RAW_STRING_SENSORS
 
 # -----------------------------
 # Fonts
@@ -142,11 +145,6 @@ def read_all_states():
     }
 
 
-# Sensors whose HA state is not a plain number and must be fetched with
-# get_state_raw() instead of get_state() - e.g. binary_sensor.charging
-# ("on"/"off"), or spring_time_to_limit which Home Assistant already
-# formats as a string like "3h 20m".
-RAW_STRING_SENSORS = {"spring_charge_status", "spring_time_to_limit", "inverter_grid_status", "inverter_fans_1", "inverter_fans_2"}
 def read_values():
     values = {}
 
@@ -223,13 +221,13 @@ def read_values():
         values["battery_charge_power"] = random.randint(500, 5000)#number.batteries_maximum_charging_power
         values["battery_discharge_power"] = random.randint(500, 5000)#number.batteries_maximum_discharging_power
 
-        values["spring_battery_level"] = round(random.uniform(0, 100), 2) #sensor.battery
-        values["spring_charge_status"] = random.choice(["on", "off"]) #binary_sensor.charging
-        values["spring_charge_power"] = random.randint(0, 9999) #sensor.feyree_ev_charger_power_in_watts
-        values["spring_charge_current"] = round(random.uniform(0, 32), 2) #number.feyree_ev_charger_set_charge_current
-        values["spring_time_to_limit"] = "1h 23m" #sensor.spring_time_remaining_2 # string !
-        values["spring_kwh_to_limit"] = round(random.uniform(0, 26), 2) #sensor.spring_charge_capacity_remaining
-        values["spring_temp"] = round(random.uniform(-10, 65), 2) #sensor.shelly_blu_h_t_ble_temperature
+        values["ev_battery_level"] = round(random.uniform(0, 100), 2) #sensor.battery
+        values["ev_charge_status"] = random.choice(["on", "off"]) #binary_sensor.charging
+        values["ev_charge_power"] = random.randint(0, 9999) #sensor.feyree_ev_charger_power_in_watts
+        values["ev_charge_current"] = round(random.uniform(0, 32), 2) #number.feyree_ev_charger_set_charge_current
+        values["ev_time_to_limit"] = "1h 23m" #sensor.spring_time_remaining_2 # string !
+        values["ev_kwh_to_limit"] = round(random.uniform(0, 26), 2) #sensor.spring_charge_capacity_remaining
+        values["ev_temp"] = round(random.uniform(-10, 65), 2) #sensor.shelly_blu_h_t_ble_temperature
 
         values["energy_solar_kwh"] = random.randint(0, 100)
         values["energy_grid_import_kwh"] = random.randint(0, 100)
@@ -368,8 +366,8 @@ def draw_error(lcd, error):
     image = Image.new("RGB", (width, height), "black")
     draw = ImageDraw.Draw(image)
 
-    draw.text( (5, 5), "PI Dash", fill="white", font=FONT_SMALL )
-    draw.text( (50, 5), "Error \u26A0", fill="red", font=FONT_SMALL )
+    draw.text( (5, 5), get_text("label_pi_dash"), fill="white", font=FONT_SMALL )
+    draw.text( (50, 5), f"{get_text('label_error')}", fill="red", font=FONT_SMALL )
 
     message = str(error).replace("\n", " ").strip()
 
@@ -416,16 +414,10 @@ def render(lcd, state, values, layout=dash_setup.SCREEN_LAYOUT):
     image = Image.new("RGB", (128, 128), background)
     draw = ImageDraw.Draw(image)
 
-#    if state.mode == "confirm":
-#        dash_helpers.draw_confirmation_screen( draw, state.pending_action_label, FONT_SMALL )
-#    elif state.mode == "menu":
-#        MENU_ITEMS[5] = hidden_menu_label()
-#        dash_helpers.draw_vertical_menu(draw, MENU_ITEMS, state.menu_selected, FONT_SMALL)
-#    else:
     if state.mode == "confirm":
         dash_helpers.draw_confirmation_screen( draw, state.pending_action_label, FONT_SMALL )
     elif state.mode == "menu":
-        dash_helpers.draw_vertical_menu(draw, MENU_ITEMS, state.menu_selected, FONT_SMALL)
+        dash_helpers.draw_vertical_menu(draw, get_menu_items(), state.menu_selected, FONT_SMALL)
     elif state.mode == "submenu":
         poll_network_restart_status()
 #        dash_helpers.draw_vertical_menu(draw, build_submenu_items(), state.menu_selected, FONT_SMALL)
@@ -518,49 +510,59 @@ def hidden_menu_label():
 #   up/down       -> move selection
 #   left          -> exit menu (cancel, screen unchanged)
 #   right/middle  -> activate the selected item
+# 
+# Item 6 is blank for spacing (and maybe future use?)
 
-#MENU_ITEMS = ["« Ieşire", "1: Solar", "2: Temperaturi", "3: Parametri", "4: Spring", "", "Repornire Pi", "Oprire Pi"]
-#MENU_SELECTABLE_INDEXES = [0, 1, 2, 3, 4, 5, 6, 7]
-MENU_ITEMS = ["« Ieşire", "1: Solar", "2: Temperaturi", "3: Parametri", "4: Spring", "5: Energie", "", "Avansat »"]
+def get_menu_items():
+    return [
+        get_text("menu_back"),
+        f"1: {get_text('menu_solar')}",
+        f"2: {get_text('menu_temps')}",
+        f"3: {get_text('menu_params')}",
+        f"4: {get_text('menu_ev')}",
+        f"5: {get_text('menu_energy')}",
+        "",
+        get_text("menu_advanced"),
+    ]
 MENU_SELECTABLE_INDEXES = [0, 1, 2, 3, 4, 5, 7]
 
 # Advanced submenu, opened from main menu item 7 ("Advanced >>").
-# Item 4 is left blank for future use.
+# Some items are blank for spacing
 #
-# On items 2 (brightness) and 3 (refresh), left/right adjust the value
-# in place instead of moving the selection - see
-# DashboardState._handle_submenu_event.
-SUBMENU_SELECTABLE_INDEXES = [0, 2, 3, 4, 5, 6, 8, 9, 11]
-
+# On items (brightness) and (refresh), left/right adjust the value
+# in place instead of moving the selection - see DashboardState._handle_submenu_event.
 
 def build_submenu_items():
     """Build the Advanced submenu labels fresh each render, since three of
     them show live state (network-restart status, brightness, refresh
     interval, and the test-mode clock/uptime label)."""
-    rotation_label = "180°" if get_current_rotation() == 180 else "0°"
+    rotation_label = "180" if get_current_rotation() == 180 else "0"
+    current_lang = "EN" if dash_translation.CURRENT_LANGUAGE == "en" else "RO"
     return [
-        "« Înapoi",
+        get_text("submenu_back"),
+        #"",  # Separator
+        get_text("submenu_brightness").format(dash_setup.DAY_BRIGHTNESS),
+        get_text("submenu_interval").format(dash_setup.UPDATE_SECONDS),
+        get_text("submenu_rotation").format(rotation_label),
+        get_text("submenu_language").format(current_lang),
+        dash_helpers.scrolling_text(get_network_restart_label(get_text("submenu_restart_network"))),
+        get_text("submenu_restart_pidash"),
         "",  # Separator
-        dash_helpers.scrolling_text(get_network_restart_label("Repornire reţea")),
-        f"Luminozitate: {dash_setup.DAY_BRIGHTNESS}%",
-        f"Interval: {dash_setup.UPDATE_SECONDS}s",
-        f"Rotație ecran: {rotation_label}",
-        "Repornire PiDash",
-        "",  # Separator
-        "* Repornire Pi",
-        "* Oprire Pi",
+        "* " + get_text("submenu_restart_pi"),
+        "* " + get_text("submenu_shutdown_pi"),
         "",  # Separator
         hidden_menu_label(),
     ]
+SUBMENU_SELECTABLE_INDEXES = [0, 1, 2, 3, 4, 5, 6, 8, 9, 11]
 
 # KEY1/2/3 are separate physical buttons from the joystick. Each jumps
 # straight to its mapped screen from anywhere (closing the menu if it's
 # open); pressing the same key again while already on that screen toggles
-# back to screen 1.
+# back to screen 1. Keys 1 and 3 are swapped when screen is rotate 180deg
 KEY_SCREEN_MAP = {
-    "key1": 1,  # Temps
-    "key2": 2,  # Params
-    "key3": 3,  # Spring
+    "key1": 1,  # Screen 1
+    "key2": 2,  # Screen 2
+    "key3": 3,  # Screen 3
 }
 
 
@@ -573,7 +575,7 @@ class DashboardState:
         self.active_screen = 0           # 0-based index into dash_screens
         self.screen_rotation = dash_setup.SCREEN_ROTATION
         self.submenu_scroll = 0          # Scroll offset for submenu
-        self.menu_selected = 0           # index into MENU_ITEMS or the submenu items
+        self.menu_selected = 0           # index into menu items or the submenu items
         self.pending_action = None       # handle confirmation screen
         self.pending_action_label = ""   # single screen for multiple questions
         self.confirm_return_mode = "menu"  # where "confirm" goes back to on cancel
@@ -645,7 +647,7 @@ class DashboardState:
             self.active_screen = (self.active_screen + 1) % dash_screens.SCREEN_COUNT
         elif button == "middle":
             self.mode = "menu"
-            self.menu_selected = 0  # "< Exit" is always the default selection
+            self.menu_selected = 0  # "<< Exit" is always the default selection
 
     def _handle_menu_event(self, button):
         if button == "left":
@@ -678,12 +680,17 @@ class DashboardState:
         visible_items = 8  # Number of items that fit on screen
         max_scroll = max(0, len(submenu_items) - visible_items)
 
-        if self.menu_selected == 3 and button in ("left", "right"):
+        # 0: back
+        if self.menu_selected == 1 and button in ("left", "right"):
             self._adjust_brightness(button)
-        elif self.menu_selected == 4 and button in ("left", "right"):
+        elif self.menu_selected == 2 and button in ("left", "right"):
             self._adjust_refresh(button)
-        elif self.menu_selected == 5 and button in ("left", "right"):
+        elif self.menu_selected == 3 and button in ("left", "right"):
             self._toggle_rotation()
+        elif self.menu_selected == 4 and button in ("left", "right"):
+            self._toggle_language()
+        # 5, 6, 8, 9, 11 handled below
+        # 7, 10: spacers
         elif button == "left":
             self._leave_submenu()
         elif button == "up":
@@ -709,6 +716,12 @@ class DashboardState:
         self.screen_rotation = 180 if self.screen_rotation == 0 else 0
         set_current_rotation(self.screen_rotation)
 
+    def _toggle_language(self):
+        new_lang = "en" if dash_translation.CURRENT_LANGUAGE == "ro" else "ro"
+        set_language(new_lang)
+        # Force menu redraw
+        self.submenu_scroll = 0
+
     def _adjust_brightness(self, button):
         step = 10 if button == "right" else -10
         new_value = max(10, min(100, dash_setup.DAY_BRIGHTNESS + step))
@@ -733,25 +746,30 @@ class DashboardState:
         if selection == 0:
             # « Înapoi
             self._leave_submenu()
-        elif selection == 2:
-            restart_network()
-        elif selection == 5:
+        # 1: brightness, handled above
+        # 2: refresh interval, handled above
+        elif selection == 3:
             self._toggle_rotation()
+        elif selection == 4:
+            self._toggle_language()
+        elif selection == 5:
+            restart_network()
         elif selection == 6:
             restart_script()
+        # 7: spacer
         elif selection == 8:
           self.pending_action = restart_system
-          self.pending_action_label = "Repornire Pi"
+          self.pending_action_label = get_text("submenu_restart_pi")
           self.confirm_return_mode = "submenu"
           self.mode = "confirm"
         elif selection == 9:
           self.pending_action = shutdown_system
-          self.pending_action_label = "Oprire Pi"
+          self.pending_action_label = get_text("submenu_shutdown_pi")
           self.confirm_return_mode = "submenu"
           self.mode = "confirm"
+        # 10: spacer
         elif selection == 11:
             dash_setup.TEST_MODE = not dash_setup.TEST_MODE
-            #MENU_ITEMS[5] = hidden_menu_label()
 
     def _handle_confirmation_event(self, button):
         if button in ("middle", "right"):
@@ -887,13 +905,6 @@ def get_current_wifi_ssid():
         return None
 
 ##
-#   network restart (Advanced submenu item 1)
-#
-# restart_network() is intentionally left as a no-op for now - wire up the
-# actual system call once we've settled on NetworkManager vs
-# dhcpcd/wpa_supplicant for this device, e.g.:
-#   os.system("sudo systemctl restart NetworkManager")
-#
 # The label shown in the submenu updates itself: "Restarting network..."
 # immediately, then flips to "<SSID> / <IP>" once connectivity is back
 # (checked every NETWORK_RESTART_CHECK_INTERVAL seconds via
@@ -909,12 +920,12 @@ _network_restart_next_check = 0.0
 
 
 def restart_network():
-    """Kick off a network restart. No-op for now - see note above."""
+    """Kick off a network restart."""
     global _network_restart_pending, _network_restart_label, _network_restart_next_check
 
 
     _network_restart_pending = True
-    _network_restart_label = "Repornire reţea..."
+    _network_restart_label = get_text("network_restart_label")
     _network_restart_next_check = time.monotonic() + NETWORK_RESTART_CHECK_INTERVAL
 
     #os.system("sudo ifconfig wlan0 down && sudo ifconfig wlan0 up")
@@ -951,7 +962,7 @@ def get_network_restart_label(default):
 
 def clear_network_restart_label():
     """Drop the network-restart status label - called when the Advanced
-    submenu is left/times out, so a stale "Repornire reţea..." / SSID
+    submenu is left/times out, so a stale "Restart network..." / SSID
     label doesn't linger next time the submenu is opened."""
     global _network_restart_pending, _network_restart_label
     _network_restart_pending = False
@@ -1071,18 +1082,18 @@ def draw_network_error(lcd):
 
     draw_connection_error(
         lcd,
-        "Eroare Reţea",
-        f"Adresă IP: {current_ip or 'neconectat'}",
-        f"SSID: {current_ssid or 'neconectat'}",
+        f"{get_text('label_network_error')}",
+        get_text("network_ip_address").format(current_ip or get_text("network_disconnected")),
+        get_text("network_ssid").format(current_ssid or get_text("network_disconnected")),
     )
 
 
 def draw_homeassistant_error(lcd):
     draw_connection_error(
         lcd,
-        "Eroare",
-        "Home Assistant",
-        "imposibil de conectat"
+        get_text("label_pi_dash"),
+        get_text('label_ha_error'),
+        get_text("cannot_reach_ha")
     )
 
 # end network check block

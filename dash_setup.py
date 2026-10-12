@@ -18,11 +18,15 @@ import pigpio
 ###
 #############################################
 
-VERSION = "v0.2.6.1"
+VERSION = "v0.2.7"
 """
 --------------------------
   Version info/history
 --------------------------
+
+v0.2.7 - 20261012
+ * separated all translatable texts and labels to dash_translation.py, added language default setting and language option
+ * some variables arrangement and unused code cleanup
 
 v0.2.6.1 - 20261011
  * fixed screen rotation not applying to error messages
@@ -80,7 +84,7 @@ SENSORS = {
     "battery_avg_temp": "sensor.battery_1_average_temperature",           # battery average temperature, helper sensor, C
     "inverter_fans_1": "switch.sonoff_10021e6428_1",                      # inverter custom cooling, fans set 1, binary state on/off
     "inverter_fans_2": "switch.sonoff_10021e6428_2",                      # inverter custom cooling, fans set 2, binary state on/off
-    # details & temps - screen 2
+    # mostly temps - screen 2
     "battery_pack1_avg_temp": "sensor.battery_1_pack_1_average_temperature",  # battery pack 1 average temperature, helper sensor, C
     "battery_pack2_avg_temp": "sensor.battery_1_pack_2_average_temperature",  # battery pack 2 average temperature, helper sensor, C
     "outside_temp": "sensor.ewelink_snzb_02p_temperature",                # outside temperature sensor, C
@@ -93,23 +97,23 @@ SENSORS = {
     "pantry_hum": "sensor.sonoff_snzb_02p_4_humidity",                    # pantry humidity sensor, %
     "attic_temp": "sensor.ts0201_h_t_z_1_temperature",                    # attic temperature sensor, C
     "bicaz_temp": "sensor.bicaz_temp_hum_iv_temperature",                 # additional temperature sensor, C
-    # extras - screen 3
-    "inverter_derating": "number.inverter_power_derating",                # inverter power deranting value, W, defaults to 5500
+    # params - screen 3
+    "inverter_derating": "number.inverter_power_derating",                # inverter power derating value, W, defaults to 5500
     "inverter_grid_status": "sensor.inverter_off_grid_status",            # inverter grid-connection status, string: ["On-Grid", "Off-Grid"]
     "battery_backup_level": "number.batteries_backup_power_soc",          # battery conservation limit, %
-    "battery_charge_power": "number.batteries_maximum_charging_power",        # battery charnging power, W, default 5000
+    "battery_charge_power": "number.batteries_maximum_charging_power",    # battery charging power, W, default 5000
     "battery_discharge_power": "number.batteries_maximum_discharging_power",  # battery discharging power, W, default 5000
-    # spring - screen 4
-    "spring_battery_level": "sensor.battery",                             # ev battery level sensor, %
-    "spring_charge_status": "binary_sensor.charging",                     # ev charging status, binary: ["on", "off"]
-    "spring_charge_power": "sensor.feyree_ev_charger_power_in_watts",     # ev charging station power, W 
-    "spring_charge_current": "number.feyree_ev_charger_set_charge_current",   # ev charging station current, A
-    "spring_time_to_limit": "sensor.spring_time_remaining_2",             # ev charging time remaining, helper sensor, string ! "__h __m"
-    "spring_kwh_to_limit": "sensor.spring_charge_capacity_remaining",     # ev charging kwh remaining, helper sensor, kWh
-    "spring_autonomy": "sensor.battery_autonomy",                         # ev autonomy remaining, km
-    "solar_estimate_today_r": "sensor.energy_production_today_remaining", # solar estimate for today, kWh
+    # ev - screen 4
+    "ev_battery_level": "sensor.battery",                                 # ev battery level sensor, %
+    "ev_charge_status": "binary_sensor.charging",                         # ev charging status, binary: ["on", "off"]
+    "ev_charge_power": "sensor.feyree_ev_charger_power_in_watts",         # ev charging station power, W 
+    "ev_charge_current": "number.feyree_ev_charger_set_charge_current",   # ev charging station current, A
+    "ev_time_to_limit": "sensor.spring_time_remaining_2",                 # ev charging time remaining, helper sensor, string ! "__h __m"
+    "ev_kwh_to_limit": "sensor.spring_charge_capacity_remaining",         # ev charging kwh remaining, helper sensor, kWh
+    "ev_autonomy": "sensor.battery_autonomy",                             # ev autonomy remaining, km
+    "ev_temp": "sensor.shelly_blu_h_t_ble_temperature",                   # ev temperature sensor, C
+    "solar_estimate_today_r": "sensor.energy_production_today_remaining", # solar estimate for today, remaining, kWh
     "solar_estimate_tomorrow": "sensor.energy_production_tomorrow",       # solar estimate for tomorrow, kWh
-    "spring_temp": "sensor.shelly_blu_h_t_ble_temperature",               # ev temperature sensor, C
     # energy - screen 5
     "energy_solar_kwh": "sensor.meter_solar_energy_daily",                # solar daily cumulative energy, helper sensor, kWh - derived from "sensor.inverter_total_dc_input_energy"
     "energy_grid_import_kwh": "sensor.meter_grid_energy_daily_import",    # grid daily cumulative import energy, helper sensor, kWh, derived from "sensor.power_meter_consumption",
@@ -119,7 +123,22 @@ SENSORS = {
     "energy_battery_charge_kwh": "sensor.batteries_day_charge",           # battery daily cumulative charge energy, kWh
 }
 
-UPDATE_SECONDS = 10     # main control for how often to refresh data from homeassistant
+# Sensors whose HA state is not a plain number and must be fetched as raw string
+# instead of numeric values (e.g., "on"/"off" for binary sensors, or pre-formatted
+# strings like "3h 20m" for time remaining)
+RAW_STRING_SENSORS = {
+    "ev_charge_status",
+    "ev_time_to_limit",
+    "inverter_grid_status",
+    "inverter_fans_1",
+    "inverter_fans_2"
+}
+
+# main control for how often to refresh data from homeassistant
+UPDATE_SECONDS = 10     
+
+# Language
+DEFAULT_LANGUAGE = "ro"
 
 # How often the button/joystick state is polled.
 BUTTON_POLL_SECONDS = 0.05
@@ -130,7 +149,7 @@ BUTTON_DEBOUNCE_SECONDS = 0.15
 # Idle time (no button presses) before the dashboard returns to screen 1.
 SCREEN_IDLE_TIMEOUT_SECONDS = 60
 
-# Layout for the Params/Spring screens: "stacked" (label above value, safe
+# Layout for the Params/EV screens: "stacked" (label above value, safe
 # from overlap) or "single_line" (label/value share one line, more
 # compact but can overlap if a label is too long for its column).
 SCREEN_LAYOUT = "stacked"
@@ -191,20 +210,6 @@ BUTTON_PINS = {
 pi = pigpio.pi()
 if not pi.connected:
     raise RuntimeError("Could not connect to pigpio daemon")
-
-#def setup_backlight_def():
-#    GPIO.setmode(GPIO.BCM)
-#    GPIO.setwarnings(False)
-#    GPIO.setup(BACKLIGHT_PIN, GPIO.OUT, initial=GPIO.HIGH)
-#
-#def setup_backlight_gpio(brightness=100):
-#    GPIO.setmode(GPIO.BCM)
-#    GPIO.setwarnings(False)
-#    GPIO.setup(BACKLIGHT_PIN, GPIO.OUT)
-#
-#    pwm = GPIO.PWM(BACKLIGHT_PIN, 1000)
-#    pwm.start(brightness) # 0–100
-#    return pwm
 
 def setup_backlight(brightness=90):
     pi.set_mode(BACKLIGHT_PIN, pigpio.OUTPUT)

@@ -17,6 +17,7 @@ A dashboard for displaying sensor data on a [Waveshare 1.44-inch LCD HAT (model 
 | `dash_functions.py` | **Core logic**: HA API client, rendering, button events, menu state |
 | `dash_helpers.py` | **Utilities**: Color helpers, text formatting, icon drawing |
 | `dash_screens.py` | **Screen layouts**: Solar, Temps, Params, EV, Energy |
+| `dash_translation.py` | **Translatable strings**: All front-facing texts displayed on-screen |
 
 ---
 
@@ -26,7 +27,7 @@ A dashboard for displaying sensor data on a [Waveshare 1.44-inch LCD HAT (model 
 - **Solar**: Power flow (solar -> grid/house/battery)
 - **Temps**: Temperature/humidity sensors (10+ locations)
 - **Params**: Inverter/battery parameters (temps, limits, power)
-- **Spring**: EV charging data (battery %, power, time remaining)
+- **EV**: EV charging data (battery %, power, time remaining)
 - **Energy**: Daily cumulative energy (solar/grid/house/battery)
 
 ### Navigation
@@ -53,6 +54,7 @@ A dashboard for displaying sensor data on a [Waveshare 1.44-inch LCD HAT (model 
 - Options to adjust brightness, data refresh interval, screen rotation
 - Ability to self-restart the script, restart networking (in case if crashes), restart and shutdown the host Pi
 - Test mode with random data for features display testing (toggle-able via hidden menu)
+- Dual-language support (Romanian and English)
 
 ### Visual Feedback
 - Color-coded values (red/green/blue for configurable thresholds)
@@ -100,10 +102,9 @@ REQUIRED_NETWORK = ipaddress.ip_network("192.168.1.0/24")
 ### Sensors
 The sensor IDs are defined in the `dash_setup.py` file. The energy and solar screens (5 and 1) require all sensors to exist to have the required amount of data for display. The other screens (2, 3 and 4) will auto-adjust to fit the list of sensors defined.
 
-Additional ID-specific parameters are set (for now) in `dash_functions.py` (random value initialization in test mode) and directly in `dash_screens.py` for applying the min/max/preset values that trigger alternative colors.   Temperature sensors accept a _warning_ value that will color them red. The lower limit warning value is hardcoded to 10°C.  
-Most other sensors accept an "over" value that triggers their warning color (also red).  
+Additional ID-specific parameters are set in the same in `dash_setup.py` with the random value initialization for test mode hardcoded in `dash_functions.py` (for now). Temperature sensors accept a _warning_ value that will color them red. The lower limit warning value is hardcoded to 10°C. Other sensors also accept threshold or default values that trigger their alternate color. 
 
-All device labels, names, menu items and messages displayed on the screen are in Romanian, but hopefully their IDs/function names in the code are self-explanatory.
+All device labels, names, menu items and messages displayed on the screen now have dual-language support and are loaded from `dash_translation.py`.
 
 
 ### Test the Dashboard

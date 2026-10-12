@@ -3,9 +3,17 @@
 
 import dash_setup
 import dash_helpers
+from dash_translation import get_text, set_language, CURRENT_LANGUAGE
 
-SCREEN_NAMES = ["Solar", "Temps", "Params", "Spring", "Energy"]
-SCREEN_COUNT = len(SCREEN_NAMES)
+def get_screen_names():
+    return [
+        get_text("screen_solar"),
+        get_text("screen_temps"),
+        get_text("screen_params"),
+        get_text("screen_ev"),
+        get_text("screen_energy"),
+    ]
+SCREEN_COUNT = len(get_screen_names())
 
 INVERTER_TEMP_WARN = 42
 BATT_BMS_TEMP_WARN = 45
@@ -23,11 +31,11 @@ def draw_screen(draw, index, values, font_tiny, font_small, font_value, font_con
     elif index == 2:
         draw_params_screen(draw, values, font_tiny, font_small, font_value, font_condensed, layout)
     elif index == 3:
-        draw_spring_screen(draw, values, font_tiny, font_small, font_value, font_condensed, layout)
+        draw_ev_screen(draw, values, font_tiny, font_small, font_value, font_condensed, layout)
     elif index == 4:
         draw_energy_screen(draw, values, font_tiny, font_small, font_value)
     else:
-        draw_placeholder_screen(draw, SCREEN_NAMES[index], font_value)
+        draw_placeholder_screen(draw, get_screen_names()[index], font_value)
 
 
 def draw_solar_screen(draw, values, font_tiny, font_small, font_value):
@@ -310,21 +318,21 @@ def draw_temps_screen(draw, values, font_tiny, font_small, font_value, font_cond
     # To add a future value: append one row here (label, sensor key, unit
     # type, warn threshold). Set warn to None to disable it - it only
     # applies to "temp" rows, coloring the value red above that threshold.
-    # Temp values below 0 always render blue, regardless of warn.
+    # Temp values below 10 always render blue, regardless of warn.
     rows = [
         #"12345678901"
         #("Temp. Inv.", "inverter_temp", "temp", INVERTER_TEMP_WARN, None),
         #("Temp. BMS", "battery_bms_temp", "temp", BATT_BMS_TEMP_WARN, None),
         #("Temp. Bat.", "battery_avg_temp", "temp", BATT_AVG_TEMP_WARN, None),
         #("Temp. PI", "pi_temp", "temp", 50, None),
-        ("Afară", "outside_temp", "temp", 27, None),
-        ("Um. Afară", "outside_hum", "percent", 80, None),
-        ("Cămară", "pantry_temp", "temp", 21, None),
-        ("Um. Cămară", "pantry_hum", "percent", 80, None),
-        ("Hol", "hallway_temp", "temp", 27, None),
-        ("Grădină", "outside2_temp", "temp", 27, None),
-        ("Pod", "attic_temp", "temp", 45, None),
-        ("Bicaz", "bicaz_temp", "temp", 27, None),
+        (get_text("temp_outside"), "outside_temp", "temp", 27, None),
+        (get_text("temp_outside_humidity"), "outside_hum", "percent", 80, None),
+        (get_text("temp_pantry"), "pantry_temp", "temp", 21, None),
+        (get_text("temp_pantry_humidity"), "pantry_hum", "percent", 80, None),
+        (get_text("temp_hallway"), "hallway_temp", "temp", 27, None),
+        (get_text("temp_outside2"), "outside2_temp", "temp", 27, None),
+        (get_text("temp_attic"), "attic_temp", "temp", 45, None),
+        (get_text("temp_bicaz"), "bicaz_temp", "temp", 27, None),
     ]
 
     units = {"temp": "\u00b0C", "percent": "%"}
@@ -376,14 +384,14 @@ def draw_params_screen(draw, values, font_tiny, font_small, font_value, font_con
     # default). Set default to None to disable this check for that row.
     rows = [
         #"12345678901"
-        ("Temp. Inv.", "inverter_temp", "\u00b0C", INVERTER_TEMP_WARN, "temp"),
-        ("Temp. BMS", "battery_bms_temp", "\u00b0C", BATT_BMS_TEMP_WARN, "temp"),
-        ("Temp. Bat.", "battery_avg_temp", "\u00b0C", BATT_AVG_TEMP_WARN, "temp"),
-        ("Temp. PI", "pi_temp", "\u00b0C", 50, "temp"),
-        ("Limită Inv.", "inverter_derating", "W", 5500, ""),
-        ("Limită Bat.", "battery_backup_level", "%", 35, ""),
-        ("Încărc. Bat.", "battery_charge_power", "W", 5000, ""),
-        ("Desc. Bat.", "battery_discharge_power", "W", 5000, ""),
+        (get_text("params_inverter_temp"), "inverter_temp", "°C", INVERTER_TEMP_WARN, "temp"),
+        (get_text("params_bms_temp"), "battery_bms_temp", "°C", BATT_BMS_TEMP_WARN, "temp"),
+        (get_text("params_battery_temp"), "battery_avg_temp", "°C", BATT_AVG_TEMP_WARN, "temp"),
+        (get_text("params_pi_temp"), "pi_temp", "°C", 50, "temp"),
+        (get_text("params_inverter_limit"), "inverter_derating", "W", 5500, ""),
+        (get_text("params_battery_limit"), "battery_backup_level", "%", 35, ""),
+        (get_text("params_charge_power"), "battery_charge_power", "W", 5000, ""),
+        (get_text("params_discharge_power"), "battery_discharge_power", "W", 5000, ""),
     ]
 
     def format_measurement(value, unit):
@@ -420,14 +428,13 @@ def draw_params_screen(draw, values, font_tiny, font_small, font_value, font_con
             draw.text((x_value + VALUE_OFFSET, value_y), text, fill=color, font=font_condensed)
 
     ########################                        ########################
-    ########################    4: SPRING SCREEN    ########################
+    ########################      4: EV SCREEN      ########################
     ########################                        ########################
 
-def draw_spring_screen(draw, values, font_tiny, font_small, font_value, font_condensed, layout="stacked"):
+def draw_ev_screen(draw, values, font_tiny, font_small, font_value, font_condensed, layout="stacked"):
     # Each row: (label, sensor key, formatter). formatter(value) returns
     # (text, color) to draw on the right. Use formatter=None for a row
-    # that needs custom drawing instead of plain text (see "Stare" below).
-    # To add a future value: append a row + a small formatter function.
+    # that needs custom drawing instead of plain text.
 
     def battery_fmt(value):
         if value is None:
@@ -467,17 +474,16 @@ def draw_spring_screen(draw, values, font_tiny, font_small, font_value, font_con
         return f"{value:.1f}\u00b0C", color
 
     rows = [
-        #"12345678901"
-        ("Baterie", "spring_battery_level", battery_fmt),
-        ("Putere Înc.", "spring_charge_power", watts_fmt),
-        ("Curent Înc.", "spring_charge_current", amps_fmt),
-        ("Autonomie", "spring_autonomy", km_fmt),
-        #("Est. azi", "solar_estimate_today_r", kwh_fmt),
-        ("Stare", "spring_charge_status", None),  # special-cased below: "Charging" / "-"
-        ("KWh de înc.", "spring_kwh_to_limit", kwh_fmt),
-        ("Timp Înc.", "spring_time_to_limit", raw_string_fmt),
-        ("Temperatură", "spring_temp", temp_fmt),
-        #("Est. mâine", "solar_estimate_tomorrow", kwh_fmt),
+        (get_text("ev_battery"), "ev_battery_level", battery_fmt),
+        (get_text("ev_charge_power"), "ev_charge_power", watts_fmt),
+        (get_text("ev_charge_current"), "ev_charge_current", amps_fmt),
+        (get_text("ev_autonomy"), "ev_autonomy", km_fmt),
+        #("Est. today", "solar_estimate_today_r", kwh_fmt),
+        (get_text("ev_charge_status"), "ev_charge_status", None), # special-cased below: "Charging" / "-"
+        (get_text("ev_kwh_to_limit"), "ev_kwh_to_limit", kwh_fmt),
+        (get_text("ev_time_to_limit"), "ev_time_to_limit", raw_string_fmt),
+        (get_text("ev_temp"), "ev_temp", temp_fmt),
+        #("Est.tomorrow", "solar_estimate_tomorrow", kwh_fmt),
     ]
 
     for index, x_label, label_y, x_value, value_y, align in dash_helpers.layout_positions(len(rows), layout):
@@ -487,9 +493,9 @@ def draw_spring_screen(draw, values, font_tiny, font_small, font_value, font_con
         draw.text((x_label, label_y), label, fill=dash_setup.WHITE, font=font_condensed)
 
         if formatter is None:
-            # "Stare": "Charging" in green while charging ("on"), "--" otherwise
+            # "Status": "Charging" in green while charging ("on"), "--" otherwise
             if value == "on":
-                text = "Încărcare"
+                text = get_text("ev_charging")
                 text_width = draw.textbbox((0, 0), text, font=font_condensed)[2]
 
                 if align == "right":
@@ -527,9 +533,8 @@ def draw_spring_screen(draw, values, font_tiny, font_small, font_value, font_con
 
 def draw_energy_screen(draw, values, font_tiny, font_small, font_value):
     # Cumulative energy for the day, cloned from the Solar screen's
-    # top/left/right/bottom layout. No arrows and no color-by-value here -
-    # just fixed colors as specified. Positions copied as-is from
-    # draw_solar_screen; adjust labels/positions later if anything overlaps.
+    # top/left/right/bottom layout. No arrows and no color-by-value here,
+    # just fixed colors.
 
     ######################## Top: SOLAR ########################
 
