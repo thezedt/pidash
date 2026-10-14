@@ -37,11 +37,15 @@ try:
     FONT_CONDENSED = ImageFont.truetype(
         "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed.ttf", 11
     )
+    FONT_SYMBOLA = ImageFont.truetype(
+        "/usr/share/fonts/truetype/ancient-scripts/Symbola_hint.ttf", 11
+    )
 except OSError:
     FONT_TINY = ImageFont.load_default()
     FONT_SMALL = FONT_TINY
     FONT_VALUE = FONT_SMALL
     FONT_CONDENSED = FONT_TINY
+    FONT_SYMBOLA = FONT_CONDENSED
 
 # -----------------------------
 # Home Assistant client
@@ -425,7 +429,7 @@ def render(lcd, state, values, layout=dash_setup.SCREEN_LAYOUT):
         dash_helpers.draw_vertical_menu_scrollable(draw, submenu_items, state.menu_selected, state.submenu_scroll, FONT_SMALL)
     else:
         dash_screens.draw_screen(
-            draw, state.active_screen, values, FONT_TINY, FONT_SMALL, FONT_VALUE, FONT_CONDENSED, layout
+            draw, state.active_screen, values, FONT_TINY, FONT_SMALL, FONT_VALUE, FONT_CONDENSED, FONT_SYMBOLA, layout
         )
         dash_helpers.draw_screen_indicator(
             draw, state.active_screen + 1, dash_screens.SCREEN_COUNT, FONT_TINY

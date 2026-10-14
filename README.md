@@ -79,7 +79,7 @@ A dashboard for displaying sensor data on a [Waveshare 1.44-inch LCD HAT (model 
    ```
 2. Install dependencies:
    ```bash
-   sudo apt install python3-pip python3-pigpio fonts-dejavu-core fonts-dejavu-extra
+   sudo apt install python3-pip python3-pigpio fonts-dejavu-core fonts-dejavu-extra fonts-symbola
    pip3 install luma.lcd RPi.GPIO pillow requests
    ```
 3. Start `pigpiod` for PWM backlight:

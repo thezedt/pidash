@@ -3,7 +3,10 @@
 
 import math
 import time
+from dash_setup import GLOBAL_OFFSET_X, GLOBAL_OFFSET_Y
 import dash_setup, dash_functions
+from dash_translation import get_text
+import dash_translation
 
 # -----------------------------
 # Color helpers
@@ -36,7 +39,7 @@ def over_limit_color(value, limit, over_color=dash_setup.RED, default_color=dash
 
 
 def value_color(value, default=None, value_type="", warn=None):
-    """Shared coloring rule for the Temps/Params/Spring screens:
+    """Shared coloring rule for the Temps/Params/EV screens:
 
     - value_type == "temp": BLUE below 10 degrees, RED at/above the alert
       threshold (`warn` if given, else `default` - Params reuses its
@@ -170,7 +173,7 @@ def text_center(draw, xy, text, fill, font):
 
 
 def two_column_positions(count, top=2, available_height=116, col_x=(2, 66), col_right=(62, 126)):
-    """Yield (index, x_label, x_value_right, text_y) laying `count` label/
+    """Yield (index, label_x, value_x_right, text_y) laying `count` label/
     value rows out into 2 columns, matching the Temps screen's grid. Row
     height scales down to fit up to ~7 rows (14 items) per screen; the
     bottom margin (available_height) leaves room for the screen-indicator
@@ -203,9 +206,9 @@ def two_column_row_blocks(count, top=2, available_height=116, col_x=(2, 66)):
         yield index, col_x[column], row_top, row_height
 
 def layout_positions(count, layout="stacked"):
-    """Yield (index, x_label, label_y, x_value, value_y, align) for `count`
+    """Yield (index, label_x, label_y, value_x, value_y, align) for `count`
     label/value rows, in the same 2-column grid used by the Temps/Params/
-    Spring screens. `layout` selects how each row is drawn:
+    EV screens. `layout` selects how each row is drawn:
 
     - "stacked" (default): label above value, both left-aligned. Needed
       when label+value combined are too wide for a single line at a
@@ -215,14 +218,14 @@ def layout_positions(count, layout="stacked"):
       label is too long for the remaining column width.
 
     `align` is "left" or "right" and tells the caller how to interpret
-    `x_value`: for "left", start the value text there; for "right", align
+    `value_x`: for "left", start the value text there; for "right", align
     the value text's right edge against it (subtract its own width)."""
     if layout == "stacked":
         for index, x, row_top, row_height in two_column_row_blocks(count):
             yield index, x, row_top, x, row_top + 12, "left"
     else:
-        for index, x_label, x_value_right, text_y in two_column_positions(count):
-            yield index, x_label, text_y, x_value_right, text_y, "right"
+        for index, label_x, value_x_right, text_y in two_column_positions(count):
+            yield index, label_x, text_y, value_x_right, text_y, "right"
 
 
 def draw_vertical_menu(draw, items, selected_index, font):
@@ -329,11 +332,11 @@ def draw_screen_indicator(draw, current, total, font=None):
     small_radius = 1
     large_radius = 2
     spacing = 8
-    y = 123
+    y = 123 + GLOBAL_OFFSET_Y
     dot_idle_color = (50, 50, 50)
 
     total_width = (total - 1) * spacing
-    start_x = 64 - total_width / 2
+    start_x = 64 - total_width / 2 + GLOBAL_OFFSET_X
 
     for index in range(total):
         x = start_x + index * spacing
@@ -732,6 +735,8 @@ def draw_wireless_icon(draw, x, y, size, color):
     quarter-arcs sweeping toward the upper-right, anchored at (x, y) as the
     icon's bottom-left corner. Used to show a background sync (e.g. a Home
     Assistant fetch) is in progress."""
+    x += GLOBAL_OFFSET_X
+    y += GLOBAL_OFFSET_Y
     cx = x
     cy = y + size
 

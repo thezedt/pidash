@@ -18,11 +18,19 @@ import pigpio
 ###
 #############################################
 
-VERSION = "v0.2.7"
+VERSION = "v0.2.8"
 """
 --------------------------
   Version info/history
 --------------------------
+
+v0.2.8 - 20261014
+ * fixed broken translations in dash_functions.py (affecting menu confirmations)
+ * added global offset constants for content to fine tune screen to case alignment issues
+ * added temperature/humidity symbols in labels and support for dual-font labels (this also requires loading an extra font - symbola)
+ * added some missing unit translations
+ * renamed variables for consistency in dash_screen.py
+ * swapped some sensors on temps screen
 
 v0.2.7 - 20261012
  * separated all translatable texts and labels to dash_translation.py, added language default setting and language option
@@ -175,9 +183,9 @@ LCD_SPI_PORT = 0
 LCD_SPI_DEVICE = 0
 LCD_GPIO_DC = 25
 LCD_GPIO_RST = 27
-LCD_ROTATE = 0
+LCD_ROTATE = 0 # number of turns: 0,1,2,3
 # Screen rotation: 0 (normal) or 180 (upside-down)
-SCREEN_ROTATION = 0
+SCREEN_ROTATION = 180
 LCD_H_OFFSET = 2
 LCD_V_OFFSET = 0
 LCD_BGR = True
@@ -191,6 +199,11 @@ KEY_PRESS_PIN = 13
 KEY1_PIN = 21
 KEY2_PIN = 20
 KEY3_PIN = 16
+
+# Global offset values to better adjust screen/case alignment when needed
+# Use positive to add margin, negative to reduce
+GLOBAL_OFFSET_X = 6
+GLOBAL_OFFSET_Y = 0
 
 # Test mode state (triggered by hidden menu item 5)
 TEST_MODE = False
