@@ -1,9 +1,12 @@
 # PiDash
 **Pi Dash(board) for HomeAssistant**
 
-A dashboard for displaying sensor data on a [Waveshare 1.44-inch LCD HAT (model 13891)](https://www.waveshare.com/1.44inch-lcd-hat.htm).
+A mini dashboard attempt displaying sensor data on a [Waveshare 1.44-inch LCD HAT (model 13891)](https://www.waveshare.com/1.44inch-lcd-hat.htm).
 
 ![Dashboard Solar Screen](/assets/dashboard.jpg)
+
+> [!TIP]
+> Project is also described on my blog: [https://zedt.eu/tech/hardware/pidash-a-gadgety-homeassistant-mini-dashboard-attempt/](https://zedt.eu/tech/hardware/pidash-a-gadgety-homeassistant-mini-dashboard-attempt/)
 
 ---
 
